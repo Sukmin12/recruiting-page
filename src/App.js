@@ -1,510 +1,702 @@
 import { useState, useEffect } from "react";
 
-// ─── 데이터 저장소 키 ───────────────────────────────────────────────────
-const STORAGE_KEY = "recruiting-page-data";
-
-// ─── 기본값 ────────────────────────────────────────────────────────────
-const DEFAULT_DATA = {
-  company: {
-    name: "",
-    tagline: "",
-    description: "",
-    culture: "",
-    website: "",
-    logoText: "",
-  },
-  positions: [],
-  process: {
-    steps: ["서류 검토", "전화 스크리닝", "1차 면접", "2차 면접", "처우 협의 및 오퍼"],
-    duration: "",
-  },
-  offer: {
-    salary: "",
-    benefits: "",
-    extra: "",
-  },
-};
-
-// ─── 색상 토큰 ─────────────────────────────────────────────────────────
+// ── 색상 ──────────────────────────────────────────────────────────────
 const C = {
-  bg: "#F7F6F3",
+  bg: "#F5F7FA",
   surface: "#FFFFFF",
-  ink: "#1A1A1A",
-  muted: "#6B6B6B",
-  accent: "#2D5BE3",
-  accentLight: "#EEF2FF",
-  border: "#E4E2DC",
-  tag: "#F0EDE6",
+  ink: "#111827",
+  muted: "#6B7280",
+  border: "#E5E7EB",
+  primary: "#2563EB",
+  primaryLight: "#EFF6FF",
+  green: "#059669",
+  greenLight: "#ECFDF5",
+  red: "#DC2626",
+  redLight: "#FEF2F2",
+  yellow: "#D97706",
+  yellowLight: "#FFFBEB",
+  purple: "#7C3AED",
+  purpleLight: "#F5F3FF",
 };
 
-// ─── 공통 스타일 헬퍼 ──────────────────────────────────────────────────
+// ── 공통 스타일 ───────────────────────────────────────────────────────
 const S = {
-  page: { minHeight: "100vh", backgroundColor: C.bg, fontFamily: "'Inter', 'Apple SD Gothic Neo', sans-serif", color: C.ink },
-  card: { backgroundColor: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, padding: "24px" },
-  label: { display: "block", fontSize: 13, fontWeight: 600, color: C.muted, marginBottom: 6, letterSpacing: "0.02em", textTransform: "uppercase" },
-  input: { width: "100%", boxSizing: "border-box", border: `1.5px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", fontSize: 15, color: C.ink, backgroundColor: C.surface, outline: "none", transition: "border-color 0.15s" },
-  textarea: { width: "100%", boxSizing: "border-box", border: `1.5px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", fontSize: 15, color: C.ink, backgroundColor: C.surface, resize: "vertical", outline: "none" },
-  btn: { backgroundColor: C.accent, color: "#fff", border: "none", borderRadius: 8, padding: "10px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", letterSpacing: "0.01em" },
-  btnOutline: { backgroundColor: "transparent", color: C.accent, border: `1.5px solid ${C.accent}`, borderRadius: 8, padding: "9px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer" },
-  btnGhost: { backgroundColor: "transparent", color: C.muted, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" },
+  page: { minHeight: "100vh", backgroundColor: C.bg, fontFamily: "'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif", color: C.ink },
+  card: { backgroundColor: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, padding: "20px" },
+  input: { width: "100%", boxSizing: "border-box", border: `1.5px solid ${C.border}`, borderRadius: 8, padding: "9px 12px", fontSize: 14, color: C.ink, backgroundColor: C.surface, outline: "none", fontFamily: "inherit" },
+  select: { width: "100%", boxSizing: "border-box", border: `1.5px solid ${C.border}`, borderRadius: 8, padding: "9px 12px", fontSize: 14, color: C.ink, backgroundColor: C.surface, outline: "none", fontFamily: "inherit", cursor: "pointer" },
+  label: { display: "block", fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 4 },
+  btn: { backgroundColor: C.primary, color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
+  btnGhost: { backgroundColor: "transparent", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", fontFamily: "inherit" },
+  btnRed: { backgroundColor: C.red, color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" },
 };
 
-// ═══════════════════════════════════════════════════════════════════════
-//  ADMIN — 관리자 편집 화면
-// ═══════════════════════════════════════════════════════════════════════
-function AdminPage({ data, onSave }) {
-  const [d, setD] = useState(JSON.parse(JSON.stringify(data)));
-  const [tab, setTab] = useState("company");
-  const [saved, setSaved] = useState(false);
-  const [newPos, setNewPos] = useState({ title: "", team: "", type: "", description: "", requirements: "", preferred: "" });
-  const [addingPos, setAddingPos] = useState(false);
+// ── 로컬스토리지 헬퍼 ────────────────────────────────────────────────
+const load = (key, def) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch { return def; } };
+const save = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} };
 
-  const set = (section, field, value) => setD(prev => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
-  const setProcess = (i, val) => setD(prev => { const s = [...prev.process.steps]; s[i] = val; return { ...prev, process: { ...prev.process, steps: s } }; });
-  const addStep = () => setD(prev => ({ ...prev, process: { ...prev.process, steps: [...prev.process.steps, ""] } }));
-  const removeStep = (i) => setD(prev => { const s = prev.process.steps.filter((_, idx) => idx !== i); return { ...prev, process: { ...prev.process, steps: s } }; });
-  const addPosition = () => { if (!newPos.title) return; setD(prev => ({ ...prev, positions: [...prev.positions, { ...newPos, id: Date.now() }] })); setNewPos({ title: "", team: "", type: "", description: "", requirements: "", preferred: "" }); setAddingPos(false); };
-  const removePos = (id) => setD(prev => ({ ...prev, positions: prev.positions.filter(p => p.id !== id) }));
+// ── 날짜 헬퍼 ────────────────────────────────────────────────────────
+const today = () => new Date().toISOString().split("T")[0];
+const daysLeft = (dateStr) => { if (!dateStr) return null; const diff = Math.ceil((new Date(dateStr) - new Date()) / 86400000); return diff; };
+const formatDate = (dateStr) => { if (!dateStr) return "-"; const d = new Date(dateStr); return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")}`; };
 
-  const handleSave = () => { onSave(d); setSaved(true); setTimeout(() => setSaved(false), 2000); };
+// ── 배지 ──────────────────────────────────────────────────────────────
+const Badge = ({ text, color = C.primary, bg = C.primaryLight }) => (
+  <span style={{ backgroundColor: bg, color, fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6 }}>{text}</span>
+);
 
-  const tabs = [
-    { id: "company", label: "🏢 회사 소개" },
-    { id: "positions", label: "📋 채용 포지션" },
-    { id: "process", label: "🔄 면접 프로세스" },
-    { id: "offer", label: "💰 처우 기준" },
+// ── 섹션 헤더 ─────────────────────────────────────────────────────────
+const SectionHeader = ({ title, sub, action }) => (
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+    <div>
+      <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em" }}>{title}</h2>
+      {sub && <p style={{ margin: "4px 0 0", fontSize: 13, color: C.muted }}>{sub}</p>}
+    </div>
+    {action}
+  </div>
+);
+
+// ════════════════════════════════════════════════════════════════════
+//  대시보드
+// ════════════════════════════════════════════════════════════════════
+function Dashboard({ employees, todos, candidates }) {
+  const alerts = [];
+
+  employees.forEach(e => {
+    if (e.probationEnd) {
+      const d = daysLeft(e.probationEnd);
+      if (d !== null && d <= 30 && d >= 0) alerts.push({ type: "수습종료", name: e.name, date: e.probationEnd, days: d, color: C.yellow, bg: C.yellowLight });
+    }
+    if (e.contractEnd) {
+      const d = daysLeft(e.contractEnd);
+      if (d !== null && d <= 30 && d >= 0) alerts.push({ type: "계약만료", name: e.name, date: e.contractEnd, days: d, color: C.red, bg: C.redLight });
+    }
+    if (e.leaveRemain !== undefined && e.leaveRemain <= 3) {
+      alerts.push({ type: "연차부족", name: e.name, date: null, days: null, color: C.purple, bg: C.purpleLight, extra: `잔여 ${e.leaveRemain}일` });
+    }
+  });
+
+  const todayTodos = todos.filter(t => !t.done);
+  const hiringCount = candidates.filter(c => c.status !== "불합격" && c.status !== "최종합격").length;
+
+  const stats = [
+    { label: "전체 직원", value: employees.length, color: C.primary, bg: C.primaryLight, icon: "👥" },
+    { label: "진행 중 채용", value: hiringCount, color: C.green, bg: C.greenLight, icon: "📋" },
+    { label: "미완료 Todo", value: todayTodos.length, color: C.yellow, bg: C.yellowLight, icon: "✅" },
+    { label: "긴급 알림", value: alerts.length, color: C.red, bg: C.redLight, icon: "⚠️" },
+  ];
+
+  return (
+    <div>
+      <SectionHeader title="대시보드" sub={`${today()} 기준`} />
+
+      {/* 통계 카드 */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
+        {stats.map(s => (
+          <div key={s.label} style={{ ...S.card, textAlign: "center", backgroundColor: s.bg, border: "none" }}>
+            <div style={{ fontSize: 28, marginBottom: 8 }}>{s.icon}</div>
+            <div style={{ fontSize: 32, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.value}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        {/* 긴급 알림 */}
+        <div style={S.card}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+            ⚠️ 긴급 알림
+          </div>
+          {alerts.length === 0 ? (
+            <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: "20px 0" }}>긴급 알림이 없습니다 ✅</div>
+          ) : alerts.map((a, i) => (
+            <div key={i} style={{ backgroundColor: a.bg, borderRadius: 8, padding: "10px 14px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <Badge text={a.type} color={a.color} bg="transparent" />
+                <span style={{ fontSize: 14, fontWeight: 600, marginLeft: 8 }}>{a.name}</span>
+                {a.extra && <span style={{ fontSize: 12, color: a.color, marginLeft: 8 }}>{a.extra}</span>}
+              </div>
+              {a.days !== null && (
+                <span style={{ fontSize: 12, fontWeight: 700, color: a.color }}>{a.days === 0 ? "오늘!" : `D-${a.days}`}</span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* 미완료 Todo */}
+        <div style={S.card}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>✅ 미완료 업무</div>
+          {todayTodos.length === 0 ? (
+            <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: "20px 0" }}>모든 업무 완료! 🎉</div>
+          ) : todayTodos.slice(0, 6).map(t => (
+            <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+              <Badge text={t.category} color={C.primary} bg={C.primaryLight} />
+              <span style={{ fontSize: 13, flex: 1 }}>{t.text}</span>
+              {t.dueDate && <span style={{ fontSize: 11, color: C.muted }}>{formatDate(t.dueDate)}</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  직원 관리
+// ════════════════════════════════════════════════════════════════════
+function EmployeeManager({ employees, setEmployees }) {
+  const [adding, setAdding] = useState(false);
+  const [search, setSearch] = useState("");
+  const [form, setForm] = useState({ name: "", dept: "", position: "", joinDate: "", employType: "정규직", probationEnd: "", contractEnd: "", leaveTotal: 15, leaveUsed: 0, phone: "", email: "" });
+  const setF = (f, v) => setForm(p => ({ ...p, [f]: v }));
+
+  const add = () => {
+    if (!form.name) return;
+    const newEmp = { ...form, id: Date.now(), leaveRemain: form.leaveTotal - form.leaveUsed };
+    const updated = [...employees, newEmp];
+    setEmployees(updated);
+    save("hr-employees", updated);
+    setForm({ name: "", dept: "", position: "", joinDate: "", employType: "정규직", probationEnd: "", contractEnd: "", leaveTotal: 15, leaveUsed: 0, phone: "", email: "" });
+    setAdding(false);
+  };
+
+  const remove = (id) => {
+    const updated = employees.filter(e => e.id !== id);
+    setEmployees(updated);
+    save("hr-employees", updated);
+  };
+
+  const filtered = employees.filter(e => e.name.includes(search) || e.dept.includes(search));
+
+  return (
+    <div>
+      <SectionHeader title="직원 관리" sub={`총 ${employees.length}명`}
+        action={<button style={S.btn} onClick={() => setAdding(!adding)}>+ 직원 추가</button>} />
+
+      {/* 추가 폼 */}
+      {adding && (
+        <div style={{ ...S.card, marginBottom: 20, backgroundColor: C.primaryLight, border: `1px solid ${C.primary}` }}>
+          <div style={{ fontWeight: 700, marginBottom: 16 }}>새 직원 등록</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+            {[["name","이름 *"],["dept","부서"],["position","직급/직책"]].map(([f,l]) => (
+              <div key={f}>
+                <label style={S.label}>{l}</label>
+                <input style={S.input} value={form[f]} onChange={e => setF(f, e.target.value)} placeholder={l} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={S.label}>입사일</label>
+              <input type="date" style={S.input} value={form.joinDate} onChange={e => setF("joinDate", e.target.value)} />
+            </div>
+            <div>
+              <label style={S.label}>고용형태</label>
+              <select style={S.select} value={form.employType} onChange={e => setF("employType", e.target.value)}>
+                {["정규직","계약직","인턴","파견직"].map(t => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={S.label}>수습 종료일</label>
+              <input type="date" style={S.input} value={form.probationEnd} onChange={e => setF("probationEnd", e.target.value)} />
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={S.label}>계약 만료일</label>
+              <input type="date" style={S.input} value={form.contractEnd} onChange={e => setF("contractEnd", e.target.value)} />
+            </div>
+            <div>
+              <label style={S.label}>연차 총일수</label>
+              <input type="number" style={S.input} value={form.leaveTotal} onChange={e => setF("leaveTotal", Number(e.target.value))} />
+            </div>
+            <div>
+              <label style={S.label}>사용 연차</label>
+              <input type="number" style={S.input} value={form.leaveUsed} onChange={e => setF("leaveUsed", Number(e.target.value))} />
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+            {[["phone","연락처"],["email","이메일"]].map(([f,l]) => (
+              <div key={f}>
+                <label style={S.label}>{l}</label>
+                <input style={S.input} value={form[f]} onChange={e => setF(f, e.target.value)} placeholder={l} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button style={S.btn} onClick={add}>저장</button>
+            <button style={S.btnGhost} onClick={() => setAdding(false)}>취소</button>
+          </div>
+        </div>
+      )}
+
+      {/* 검색 */}
+      <input style={{ ...S.input, marginBottom: 16 }} placeholder="이름 또는 부서로 검색" value={search} onChange={e => setSearch(e.target.value)} />
+
+      {/* 직원 목록 */}
+      <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ backgroundColor: C.bg }}>
+              {["이름","부서","직급","고용형태","입사일","수습종료","계약만료","연차현황","연락처",""].map(h => (
+                <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 600, color: C.muted, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><td colSpan={10} style={{ padding: "40px", textAlign: "center", color: C.muted }}>등록된 직원이 없습니다</td></tr>
+            ) : filtered.map(e => {
+              const probDays = daysLeft(e.probationEnd);
+              const contDays = daysLeft(e.contractEnd);
+              const leaveRemain = e.leaveTotal - e.leaveUsed;
+              return (
+                <tr key={e.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <td style={{ padding: "12px 14px", fontWeight: 600 }}>{e.name}</td>
+                  <td style={{ padding: "12px 14px", color: C.muted }}>{e.dept || "-"}</td>
+                  <td style={{ padding: "12px 14px", color: C.muted }}>{e.position || "-"}</td>
+                  <td style={{ padding: "12px 14px" }}>
+                    <Badge text={e.employType} color={e.employType === "정규직" ? C.green : C.yellow} bg={e.employType === "정규직" ? C.greenLight : C.yellowLight} />
+                  </td>
+                  <td style={{ padding: "12px 14px", color: C.muted }}>{formatDate(e.joinDate)}</td>
+                  <td style={{ padding: "12px 14px" }}>
+                    {e.probationEnd ? (
+                      <span style={{ color: probDays !== null && probDays <= 7 ? C.red : C.muted, fontWeight: probDays !== null && probDays <= 7 ? 700 : 400 }}>
+                        {formatDate(e.probationEnd)}{probDays !== null && probDays >= 0 && ` (D-${probDays})`}
+                      </span>
+                    ) : "-"}
+                  </td>
+                  <td style={{ padding: "12px 14px" }}>
+                    {e.contractEnd ? (
+                      <span style={{ color: contDays !== null && contDays <= 30 ? C.red : C.muted, fontWeight: contDays !== null && contDays <= 30 ? 700 : 400 }}>
+                        {formatDate(e.contractEnd)}{contDays !== null && contDays >= 0 && ` (D-${contDays})`}
+                      </span>
+                    ) : "-"}
+                  </td>
+                  <td style={{ padding: "12px 14px" }}>
+                    <span style={{ color: leaveRemain <= 3 ? C.red : C.green, fontWeight: 600 }}>{leaveRemain}일</span>
+                    <span style={{ color: C.muted, fontSize: 11 }}> / {e.leaveTotal}일</span>
+                  </td>
+                  <td style={{ padding: "12px 14px", color: C.muted }}>{e.phone || "-"}</td>
+                  <td style={{ padding: "12px 14px" }}>
+                    <button style={S.btnRed} onClick={() => remove(e.id)}>삭제</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  채용 관리
+// ════════════════════════════════════════════════════════════════════
+function RecruitManager({ candidates, setCandidates }) {
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ name: "", position: "", appliedDate: today(), status: "서류검토", phone: "", email: "", resume: "", note: "" });
+  const setF = (f, v) => setForm(p => ({ ...p, [f]: v }));
+  const stages = ["서류검토", "전화스크리닝", "1차면접", "2차면접", "처우협의", "최종합격", "불합격"];
+
+  const add = () => {
+    if (!form.name || !form.position) return;
+    const updated = [...candidates, { ...form, id: Date.now() }];
+    setCandidates(updated);
+    save("hr-candidates", updated);
+    setForm({ name: "", position: "", appliedDate: today(), status: "서류검토", phone: "", email: "", resume: "", note: "" });
+    setAdding(false);
+  };
+
+  const updateStatus = (id, status) => {
+    const updated = candidates.map(c => c.id === id ? { ...c, status } : c);
+    setCandidates(updated);
+    save("hr-candidates", updated);
+  };
+
+  const remove = (id) => {
+    const updated = candidates.filter(c => c.id !== id);
+    setCandidates(updated);
+    save("hr-candidates", updated);
+  };
+
+  const stageColor = (s) => {
+    if (s === "최종합격") return { color: C.green, bg: C.greenLight };
+    if (s === "불합격") return { color: C.red, bg: C.redLight };
+    if (s === "처우협의") return { color: C.purple, bg: C.purpleLight };
+    return { color: C.primary, bg: C.primaryLight };
+  };
+
+  return (
+    <div>
+      <SectionHeader title="채용 관리" sub={`진행 중 ${candidates.filter(c => c.status !== "불합격" && c.status !== "최종합격").length}건`}
+        action={<button style={S.btn} onClick={() => setAdding(!adding)}>+ 지원자 추가</button>} />
+
+      {/* 단계별 현황 */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, overflowX: "auto", paddingBottom: 4 }}>
+        {stages.map(s => {
+          const count = candidates.filter(c => c.status === s).length;
+          const sc = stageColor(s);
+          return (
+            <div key={s} style={{ flexShrink: 0, backgroundColor: sc.bg, borderRadius: 8, padding: "10px 16px", textAlign: "center", minWidth: 80 }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: sc.color }}>{count}</div>
+              <div style={{ fontSize: 11, color: sc.color, fontWeight: 600 }}>{s}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 추가 폼 */}
+      {adding && (
+        <div style={{ ...S.card, marginBottom: 20, backgroundColor: C.primaryLight, border: `1px solid ${C.primary}` }}>
+          <div style={{ fontWeight: 700, marginBottom: 16 }}>지원자 추가</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+            {[["name","이름 *"],["position","지원 포지션 *"],["phone","연락처"]].map(([f,l]) => (
+              <div key={f}>
+                <label style={S.label}>{l}</label>
+                <input style={S.input} value={form[f]} onChange={e => setF(f, e.target.value)} placeholder={l} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={S.label}>이메일</label>
+              <input style={S.input} value={form.email} onChange={e => setF("email", e.target.value)} placeholder="이메일" />
+            </div>
+            <div>
+              <label style={S.label}>지원일</label>
+              <input type="date" style={S.input} value={form.appliedDate} onChange={e => setF("appliedDate", e.target.value)} />
+            </div>
+            <div>
+              <label style={S.label}>현재 단계</label>
+              <select style={S.select} value={form.status} onChange={e => setF("status", e.target.value)}>
+                {stages.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={S.label}>메모</label>
+            <input style={S.input} value={form.note} onChange={e => setF("note", e.target.value)} placeholder="특이사항, 메모" />
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button style={S.btn} onClick={add}>저장</button>
+            <button style={S.btnGhost} onClick={() => setAdding(false)}>취소</button>
+          </div>
+        </div>
+      )}
+
+      {/* 지원자 목록 */}
+      <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ backgroundColor: C.bg }}>
+              {["이름","지원 포지션","연락처","지원일","진행 단계","메모",""].map(h => (
+                <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 600, color: C.muted, borderBottom: `1px solid ${C.border}` }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {candidates.length === 0 ? (
+              <tr><td colSpan={7} style={{ padding: "40px", textAlign: "center", color: C.muted }}>등록된 지원자가 없습니다</td></tr>
+            ) : candidates.map(c => {
+              const sc = stageColor(c.status);
+              return (
+                <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <td style={{ padding: "12px 14px", fontWeight: 600 }}>{c.name}</td>
+                  <td style={{ padding: "12px 14px", color: C.muted }}>{c.position}</td>
+                  <td style={{ padding: "12px 14px", color: C.muted }}>{c.phone || "-"}</td>
+                  <td style={{ padding: "12px 14px", color: C.muted }}>{formatDate(c.appliedDate)}</td>
+                  <td style={{ padding: "12px 14px" }}>
+                    <select value={c.status} onChange={e => updateStatus(c.id, e.target.value)}
+                      style={{ backgroundColor: sc.bg, color: sc.color, border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                      {stages.map(s => <option key={s}>{s}</option>)}
+                    </select>
+                  </td>
+                  <td style={{ padding: "12px 14px", color: C.muted, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.note || "-"}</td>
+                  <td style={{ padding: "12px 14px" }}>
+                    <button style={S.btnRed} onClick={() => remove(c.id)}>삭제</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  온보딩 체크리스트
+// ════════════════════════════════════════════════════════════════════
+const DEFAULT_CHECKLIST = [
+  "입사 안내 메일 발송", "노트북 신청", "이메일 계정 생성", "사내 시스템 계정 발급",
+  "4대보험 취득 신고", "급여 계좌 등록", "근로계약서 서명", "조직도 안내",
+  "팀 소개 미팅 진행", "사원증 발급", "명함 제작 신청", "주차 등록",
+];
+
+function OnboardingManager({ employees }) {
+  const [onboardings, setOnboardings] = useState(() => load("hr-onboardings", []));
+  const [selected, setSelected] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [joinDate, setJoinDate] = useState(today());
+
+  const addOnboarding = () => {
+    if (!newName) return;
+    const items = DEFAULT_CHECKLIST.map((text, i) => ({ id: i, text, done: false }));
+    const updated = [...onboardings, { id: Date.now(), name: newName, joinDate, items }];
+    setOnboardings(updated);
+    save("hr-onboardings", updated);
+    setNewName(""); setJoinDate(today()); setAdding(false);
+  };
+
+  const toggleItem = (onbId, itemId) => {
+    const updated = onboardings.map(o => o.id === onbId ? {
+      ...o, items: o.items.map(item => item.id === itemId ? { ...item, done: !item.done } : item)
+    } : o);
+    setOnboardings(updated);
+    save("hr-onboardings", updated);
+  };
+
+  const removeOnboarding = (id) => {
+    const updated = onboardings.filter(o => o.id !== id);
+    setOnboardings(updated);
+    save("hr-onboardings", updated);
+    if (selected === id) setSelected(null);
+  };
+
+  const current = onboardings.find(o => o.id === selected);
+
+  return (
+    <div>
+      <SectionHeader title="온보딩 체크리스트" sub="입사자별 온보딩 진행 현황"
+        action={<button style={S.btn} onClick={() => setAdding(!adding)}>+ 입사자 추가</button>} />
+
+      {adding && (
+        <div style={{ ...S.card, marginBottom: 20, backgroundColor: C.primaryLight, border: `1px solid ${C.primary}` }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 12, alignItems: "flex-end" }}>
+            <div>
+              <label style={S.label}>입사자 이름 *</label>
+              <input style={S.input} value={newName} onChange={e => setNewName(e.target.value)} placeholder="홍길동" />
+            </div>
+            <div>
+              <label style={S.label}>입사일</label>
+              <input type="date" style={S.input} value={joinDate} onChange={e => setJoinDate(e.target.value)} />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={S.btn} onClick={addOnboarding}>추가</button>
+              <button style={S.btnGhost} onClick={() => setAdding(false)}>취소</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 }}>
+        {/* 입사자 목록 */}
+        <div style={S.card}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: C.muted, marginBottom: 12 }}>입사자 목록</div>
+          {onboardings.length === 0 ? (
+            <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: "20px 0" }}>입사자를 추가해주세요</div>
+          ) : onboardings.map(o => {
+            const done = o.items.filter(i => i.done).length;
+            const total = o.items.length;
+            const pct = Math.round(done / total * 100);
+            return (
+              <div key={o.id} onClick={() => setSelected(o.id)}
+                style={{ padding: "12px", borderRadius: 8, marginBottom: 8, cursor: "pointer", backgroundColor: selected === o.id ? C.primaryLight : C.bg, border: `1px solid ${selected === o.id ? C.primary : C.border}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>{o.name}</span>
+                  <button onClick={e => { e.stopPropagation(); removeOnboarding(o.id); }} style={{ ...S.btnRed, padding: "3px 8px", fontSize: 11 }}>삭제</button>
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>{formatDate(o.joinDate)} 입사</div>
+                <div style={{ backgroundColor: C.border, borderRadius: 4, height: 6, overflow: "hidden" }}>
+                  <div style={{ width: `${pct}%`, height: "100%", backgroundColor: pct === 100 ? C.green : C.primary, borderRadius: 4, transition: "width 0.3s" }} />
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{done}/{total} 완료 ({pct}%)</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 체크리스트 */}
+        <div style={S.card}>
+          {!current ? (
+            <div style={{ color: C.muted, fontSize: 14, textAlign: "center", padding: "60px 0" }}>왼쪽에서 입사자를 선택해주세요</div>
+          ) : (
+            <>
+              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{current.name} 온보딩 체크리스트</div>
+              <div style={{ color: C.muted, fontSize: 13, marginBottom: 20 }}>{formatDate(current.joinDate)} 입사</div>
+              {current.items.map(item => (
+                <div key={item.id} onClick={() => toggleItem(current.id, item.id)}
+                  style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 8, marginBottom: 6, cursor: "pointer", backgroundColor: item.done ? C.greenLight : C.bg, transition: "background 0.15s" }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${item.done ? C.green : C.border}`, backgroundColor: item.done ? C.green : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {item.done && <span style={{ color: "#fff", fontSize: 12 }}>✓</span>}
+                  </div>
+                  <span style={{ fontSize: 14, textDecoration: item.done ? "line-through" : "none", color: item.done ? C.muted : C.ink }}>{item.text}</span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Todo 관리
+// ════════════════════════════════════════════════════════════════════
+function TodoManager() {
+  const [todos, setTodos] = useState(() => load("hr-todos", []));
+  const [form, setForm] = useState({ text: "", category: "채용", dueDate: "", priority: "보통" });
+  const [filter, setFilter] = useState("전체");
+  const setF = (f, v) => setForm(p => ({ ...p, [f]: v }));
+
+  const categories = ["채용", "온보딩", "근태", "급여", "총무", "행사", "기타"];
+  const priorities = ["높음", "보통", "낮음"];
+
+  const add = () => {
+    if (!form.text) return;
+    const updated = [...todos, { ...form, id: Date.now(), done: false, createdAt: today() }];
+    setTodos(updated);
+    save("hr-todos", updated);
+    setForm({ text: "", category: "채용", dueDate: "", priority: "보통" });
+  };
+
+  const toggle = (id) => {
+    const updated = todos.map(t => t.id === id ? { ...t, done: !t.done } : t);
+    setTodos(updated);
+    save("hr-todos", updated);
+  };
+
+  const remove = (id) => {
+    const updated = todos.filter(t => t.id !== id);
+    setTodos(updated);
+    save("hr-todos", updated);
+  };
+
+  const filtered = todos.filter(t => filter === "전체" ? true : filter === "완료" ? t.done : !t.done && t.category === filter || filter === "미완료" && !t.done);
+  const priorityColor = (p) => p === "높음" ? { color: C.red, bg: C.redLight } : p === "낮음" ? { color: C.muted, bg: C.bg } : { color: C.yellow, bg: C.yellowLight };
+
+  return (
+    <div>
+      <SectionHeader title="업무 Todo" sub={`미완료 ${todos.filter(t => !t.done).length}건`} />
+
+      {/* 추가 */}
+      <div style={{ ...S.card, marginBottom: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: 10, alignItems: "flex-end" }}>
+          <div>
+            <label style={S.label}>업무 내용 *</label>
+            <input style={S.input} value={form.text} onChange={e => setF("text", e.target.value)} placeholder="할 일을 입력하세요" onKeyDown={e => e.key === "Enter" && add()} />
+          </div>
+          <div>
+            <label style={S.label}>카테고리</label>
+            <select style={{ ...S.select, width: "auto" }} value={form.category} onChange={e => setF("category", e.target.value)}>
+              {categories.map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={S.label}>우선순위</label>
+            <select style={{ ...S.select, width: "auto" }} value={form.priority} onChange={e => setF("priority", e.target.value)}>
+              {priorities.map(p => <option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={S.label}>마감일</label>
+            <input type="date" style={{ ...S.input, width: "auto" }} value={form.dueDate} onChange={e => setF("dueDate", e.target.value)} />
+          </div>
+        </div>
+        <button style={{ ...S.btn, marginTop: 12 }} onClick={add}>+ 추가</button>
+      </div>
+
+      {/* 필터 */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+        {["전체", "미완료", "완료", ...categories].map(f => (
+          <button key={f} onClick={() => setFilter(f)}
+            style={{ border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", backgroundColor: filter === f ? C.primary : C.bg, color: filter === f ? "#fff" : C.muted, fontFamily: "inherit" }}>
+            {f}
+          </button>
+        ))}
+      </div>
+
+      {/* Todo 목록 */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {filtered.length === 0 ? (
+          <div style={{ ...S.card, textAlign: "center", color: C.muted, padding: "40px" }}>할 일이 없습니다 🎉</div>
+        ) : filtered.map(t => {
+          const pc = priorityColor(t.priority);
+          const dl = daysLeft(t.dueDate);
+          return (
+            <div key={t.id} style={{ ...S.card, display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", opacity: t.done ? 0.6 : 1 }}>
+              <div onClick={() => toggle(t.id)} style={{ width: 22, height: 22, borderRadius: 4, border: `2px solid ${t.done ? C.green : C.border}`, backgroundColor: t.done ? C.green : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+                {t.done && <span style={{ color: "#fff", fontSize: 13 }}>✓</span>}
+              </div>
+              <Badge text={t.category} color={C.primary} bg={C.primaryLight} />
+              <Badge text={t.priority} color={pc.color} bg={pc.bg} />
+              <span style={{ flex: 1, fontSize: 14, textDecoration: t.done ? "line-through" : "none", color: t.done ? C.muted : C.ink }}>{t.text}</span>
+              {t.dueDate && (
+                <span style={{ fontSize: 12, fontWeight: 600, color: dl !== null && dl <= 1 && !t.done ? C.red : C.muted }}>
+                  {formatDate(t.dueDate)}{dl !== null && !t.done && dl <= 3 && ` (D-${dl})`}
+                </span>
+              )}
+              <button style={S.btnRed} onClick={() => remove(t.id)}>삭제</button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  앱 루트
+// ════════════════════════════════════════════════════════════════════
+export default function App() {
+  const [page, setPage] = useState("dashboard");
+  const [employees, setEmployees] = useState(() => load("hr-employees", []));
+  const [candidates, setCandidates] = useState(() => load("hr-candidates", []));
+  const [todos] = useState(() => load("hr-todos", []));
+
+  const nav = [
+    { id: "dashboard", label: "대시보드", icon: "🏠" },
+    { id: "employees", label: "직원 관리", icon: "👥" },
+    { id: "recruiting", label: "채용 관리", icon: "📋" },
+    { id: "onboarding", label: "온보딩", icon: "✅" },
+    { id: "todo", label: "업무 Todo", icon: "📌" },
   ];
 
   return (
     <div style={{ ...S.page, display: "flex" }}>
       {/* 사이드바 */}
-      <div style={{ width: 220, minHeight: "100vh", backgroundColor: C.surface, borderRight: `1px solid ${C.border}`, padding: "32px 0", flexShrink: 0 }}>
-        <div style={{ padding: "0 20px 24px", borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>ADMIN</div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: C.ink }}>채용 페이지 편집</div>
+      <div style={{ width: 220, minHeight: "100vh", backgroundColor: C.surface, borderRight: `1px solid ${C.border}`, padding: "0", flexShrink: 0, position: "sticky", top: 0, height: "100vh" }}>
+        <div style={{ padding: "24px 20px 20px", borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>HR SYSTEM</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: C.ink, letterSpacing: "-0.02em" }}>인사 업무 관리</div>
         </div>
-        <div style={{ padding: "16px 12px" }}>
-          {tabs.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 14, fontWeight: tab === t.id ? 600 : 400, backgroundColor: tab === t.id ? C.accentLight : "transparent", color: tab === t.id ? C.accent : C.ink, marginBottom: 2 }}>
-              {t.label}
+        <div style={{ padding: "12px" }}>
+          {nav.map(n => (
+            <button key={n.id} onClick={() => setPage(n.id)}
+              style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "10px 12px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 14, fontWeight: page === n.id ? 700 : 400, backgroundColor: page === n.id ? C.primaryLight : "transparent", color: page === n.id ? C.primary : C.ink, marginBottom: 2, fontFamily: "inherit" }}>
+              <span>{n.icon}</span>
+              <span>{n.label}</span>
             </button>
           ))}
         </div>
+        <div style={{ padding: "20px", position: "absolute", bottom: 0, fontSize: 11, color: C.muted }}>
+          직원 {employees.length}명 · 지원자 {candidates.length}명
+        </div>
       </div>
 
-      {/* 본문 */}
-      <div style={{ flex: 1, padding: "40px 48px", maxWidth: 720 }}>
-        {/* 회사 소개 */}
-        {tab === "company" && (
-          <div>
-            <h2 style={{ margin: "0 0 24px", fontSize: 22, fontWeight: 700 }}>회사 소개</h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              {[["name", "회사 이름 *"], ["logoText", "로고 텍스트 (약자)"], ["tagline", "한 줄 소개"], ["website", "웹사이트 URL"]].map(([f, l]) => (
-                <div key={f}>
-                  <label style={S.label}>{l}</label>
-                  <input style={S.input} value={d.company[f]} onChange={e => set("company", f, e.target.value)} placeholder={l} />
-                </div>
-              ))}
-              <div>
-                <label style={S.label}>회사 소개 (상세)</label>
-                <textarea style={{ ...S.textarea, minHeight: 120 }} value={d.company.description} onChange={e => set("company", "description", e.target.value)} placeholder="회사의 미션, 비전, 사업 내용을 작성하세요." />
-              </div>
-              <div>
-                <label style={S.label}>회사 문화 / 핵심 가치</label>
-                <textarea style={{ ...S.textarea, minHeight: 100 }} value={d.company.culture} onChange={e => set("company", "culture", e.target.value)} placeholder="팀 문화, 일하는 방식, 중요하게 여기는 가치를 작성하세요." />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 채용 포지션 */}
-        {tab === "positions" && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>채용 포지션</h2>
-              <button style={S.btn} onClick={() => setAddingPos(true)}>+ 포지션 추가</button>
-            </div>
-            {d.positions.length === 0 && !addingPos && (
-              <div style={{ ...S.card, textAlign: "center", padding: "48px", color: C.muted }}>
-                아직 등록된 포지션이 없어요.<br />위 버튼을 눌러 추가해보세요.
-              </div>
-            )}
-            {d.positions.map(p => (
-              <div key={p.id} style={{ ...S.card, marginBottom: 16, position: "relative" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 16 }}>{p.title}</div>
-                    <div style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>{p.team} · {p.type}</div>
-                  </div>
-                  <button onClick={() => removePos(p.id)} style={{ ...S.btnGhost, color: "#E53E3E", borderColor: "#FED7D7", fontSize: 12, padding: "5px 12px" }}>삭제</button>
-                </div>
-              </div>
-            ))}
-            {addingPos && (
-              <div style={{ ...S.card, marginTop: 16 }}>
-                <div style={{ fontWeight: 700, marginBottom: 20, fontSize: 16 }}>새 포지션 추가</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-                  {[["title", "직무명 *"], ["team", "팀 / 부서"], ["type", "고용 형태 (정규직/계약직)"]].map(([f, l]) => (
-                    <div key={f} style={f === "title" ? { gridColumn: "1/-1" } : {}}>
-                      <label style={S.label}>{l}</label>
-                      <input style={S.input} value={newPos[f]} onChange={e => setNewPos(p => ({ ...p, [f]: e.target.value }))} placeholder={l} />
-                    </div>
-                  ))}
-                </div>
-                {[["description", "직무 소개"], ["requirements", "자격 요건"], ["preferred", "우대 사항"]].map(([f, l]) => (
-                  <div key={f} style={{ marginBottom: 16 }}>
-                    <label style={S.label}>{l}</label>
-                    <textarea style={{ ...S.textarea, minHeight: 80 }} value={newPos[f]} onChange={e => setNewPos(p => ({ ...p, [f]: e.target.value }))} placeholder={l} />
-                  </div>
-                ))}
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button style={S.btn} onClick={addPosition}>저장</button>
-                  <button style={S.btnGhost} onClick={() => setAddingPos(false)}>취소</button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 면접 프로세스 */}
-        {tab === "process" && (
-          <div>
-            <h2 style={{ margin: "0 0 24px", fontSize: 22, fontWeight: 700 }}>면접 프로세스</h2>
-            <div style={{ marginBottom: 24 }}>
-              <label style={S.label}>전체 소요 기간</label>
-              <input style={S.input} value={d.process.duration} onChange={e => set("process", "duration", e.target.value)} placeholder="예: 지원 후 2~3주 이내" />
-            </div>
-            <label style={S.label}>단계별 프로세스</label>
-            {d.process.steps.map((s, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                <div style={{ width: 28, height: 28, borderRadius: "50%", backgroundColor: C.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
-                <input style={{ ...S.input }} value={s} onChange={e => setProcess(i, e.target.value)} placeholder={`${i + 1}단계`} />
-                <button onClick={() => removeStep(i)} style={{ ...S.btnGhost, padding: "8px 12px", flexShrink: 0 }}>×</button>
-              </div>
-            ))}
-            <button style={{ ...S.btnGhost, marginTop: 8 }} onClick={addStep}>+ 단계 추가</button>
-          </div>
-        )}
-
-        {/* 처우 기준 */}
-        {tab === "offer" && (
-          <div>
-            <h2 style={{ margin: "0 0 24px", fontSize: 22, fontWeight: 700 }}>처우 기준</h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <div>
-                <label style={S.label}>연봉 / 급여 정책</label>
-                <textarea style={{ ...S.textarea, minHeight: 90 }} value={d.offer.salary} onChange={e => set("offer", "salary", e.target.value)} placeholder="예: 경력 및 역량에 따라 협의. 전 직장 대비 최소 10% 이상 보장." />
-              </div>
-              <div>
-                <label style={S.label}>복리후생</label>
-                <textarea style={{ ...S.textarea, minHeight: 120 }} value={d.offer.benefits} onChange={e => set("offer", "benefits", e.target.value)} placeholder="예: 유연근무제, 재택근무 주 2회, 교육비 지원, 스톡옵션 등" />
-              </div>
-              <div>
-                <label style={S.label}>기타 안내</label>
-                <textarea style={{ ...S.textarea, minHeight: 80 }} value={d.offer.extra} onChange={e => set("offer", "extra", e.target.value)} placeholder="입사일 조율, 수습 기간 등 추가 안내" />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 저장 버튼 */}
-        <div style={{ marginTop: 36, paddingTop: 24, borderTop: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 16 }}>
-          <button style={{ ...S.btn, padding: "12px 32px", fontSize: 15 }} onClick={handleSave}>변경사항 저장</button>
-          {saved && <span style={{ color: "#38A169", fontWeight: 600, fontSize: 14 }}>✓ 저장되었습니다</span>}
-        </div>
+      {/* 메인 콘텐츠 */}
+      <div style={{ flex: 1, padding: "32px 36px", overflowY: "auto", maxHeight: "100vh" }}>
+        {page === "dashboard" && <Dashboard employees={employees} todos={todos} candidates={candidates} />}
+        {page === "employees" && <EmployeeManager employees={employees} setEmployees={setEmployees} />}
+        {page === "recruiting" && <RecruitManager candidates={candidates} setCandidates={setCandidates} />}
+        {page === "onboarding" && <OnboardingManager employees={employees} />}
+        {page === "todo" && <TodoManager />}
       </div>
     </div>
   );
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-//  APPLY FORM — 지원 폼 모달
-// ═══════════════════════════════════════════════════════════════════════
-// ⚠️ 여기에 본인의 Apps Script URL 붙여넣기
-const SHEETS_URL = "https://script.google.com/macros/s/AKfycbz2-vOTwX-EEKYNtwM4gwsXpzRaZSm0tXp9mNqTIpVu11mYBmJ1HhWeVj3EwH4qt_Aq/exec";
-
-function ApplyModal({ position, companyName, onClose }) {
-  const [form, setForm] = useState({ name: "", email: "", phone: "", currentCompany: "", experience: "", portfolio: "", motivation: "" });
-  const [submitted, setSubmitted] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const setF = (f, v) => setForm(p => ({ ...p, [f]: v }));
-  const handleSubmit = async () => {
-    if (!form.name || !form.email) return;
-    setLoading(true);
-    setError("");
-    try {
-      await fetch(SHEETS_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, position: position.title }),
-      });
-      setSubmitted(true);
-    } catch (e) {
-      setError("제출 중 오류가 발생했습니다. 다시 시도해주세요.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
-      <div style={{ backgroundColor: C.surface, borderRadius: 16, width: "100%", maxWidth: 560, maxHeight: "90vh", overflowY: "auto", padding: "36px 40px" }}>
-        {submitted ? (
-          <div style={{ textAlign: "center", padding: "24px 0" }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
-            <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>지원이 완료되었습니다</div>
-            <div style={{ color: C.muted, lineHeight: 1.7, marginBottom: 28 }}>
-              <strong>{form.name}</strong>님, <strong>{position.title}</strong> 포지션에 지원해주셔서 감사합니다.<br />
-              검토 후 <strong>{form.email}</strong>로 연락드리겠습니다.
-            </div>
-            <button style={S.btn} onClick={onClose}>닫기</button>
-          </div>
-        ) : (
-          <>
-            <div style={{ marginBottom: 28 }}>
-              <div style={{ fontSize: 13, color: C.muted, fontWeight: 600, marginBottom: 6 }}>{companyName}</div>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>{position.title} 지원하기</div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                <div>
-                  <label style={S.label}>이름 *</label>
-                  <input style={S.input} value={form.name} onChange={e => setF("name", e.target.value)} placeholder="홍길동" />
-                </div>
-                <div>
-                  <label style={S.label}>연락처</label>
-                  <input style={S.input} value={form.phone} onChange={e => setF("phone", e.target.value)} placeholder="010-0000-0000" />
-                </div>
-              </div>
-              <div>
-                <label style={S.label}>이메일 *</label>
-                <input style={S.input} value={form.email} onChange={e => setF("email", e.target.value)} placeholder="email@example.com" />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                <div>
-                  <label style={S.label}>현재 재직 중인 회사</label>
-                  <input style={S.input} value={form.currentCompany} onChange={e => setF("currentCompany", e.target.value)} placeholder="회사명 (없으면 공란)" />
-                </div>
-                <div>
-                  <label style={S.label}>총 경력</label>
-                  <input style={S.input} value={form.experience} onChange={e => setF("experience", e.target.value)} placeholder="예: 5년 3개월" />
-                </div>
-              </div>
-              <div>
-                <label style={S.label}>포트폴리오 / 링크드인 / GitHub</label>
-                <input style={S.input} value={form.portfolio} onChange={e => setF("portfolio", e.target.value)} placeholder="https://" />
-              </div>
-              <div>
-                <label style={S.label}>지원 동기</label>
-                <textarea style={{ ...S.textarea, minHeight: 100 }} value={form.motivation} onChange={e => setF("motivation", e.target.value)} placeholder="이 포지션에 지원하게 된 이유와 본인의 강점을 간략히 적어주세요." />
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 12, marginTop: 28 }}>
-              {error && <div style={{ color: "#E53E3E", fontSize: 13, marginBottom: 8 }}>{error}</div>}
-              <button style={{ ...S.btn, flex: 1, padding: "13px" }} onClick={handleSubmit} disabled={loading}>
-                {loading ? "제출 중..." : "지원서 제출"}
-              </button>
-              <button style={{ ...S.btnGhost, padding: "13px 20px" }} onClick={onClose}>취소</button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-//  PUBLIC — 지원자 채용 페이지
-// ═══════════════════════════════════════════════════════════════════════
-function PublicPage({ data, onAdminClick }) {
-  const { company, positions, process, offer } = data;
-  const [selected, setSelected] = useState(null);
-  const [applyPos, setApplyPos] = useState(null);
-  const isEmpty = !company.name;
-
-  return (
-    <div style={S.page}>
-      {/* 네브바 */}
-      <nav style={{ backgroundColor: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 40px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60, position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: "-0.02em", color: C.accent }}>
-          {company.logoText || company.name || "Company"}
-        </div>
-        <div style={{ display: "flex", gap: 32, fontSize: 14, fontWeight: 500, color: C.muted }}>
-          <a href="#about" style={{ textDecoration: "none", color: "inherit" }}>회사 소개</a>
-          <a href="#positions" style={{ textDecoration: "none", color: "inherit" }}>채용 공고</a>
-          <a href="#process" style={{ textDecoration: "none", color: "inherit" }}>프로세스</a>
-        </div>
-        <button style={{ ...S.btnGhost, fontSize: 12 }} onClick={onAdminClick}>⚙ 관리자</button>
-      </nav>
-
-      {isEmpty ? (
-        <div style={{ textAlign: "center", padding: "120px 24px", color: C.muted }}>
-          <div style={{ fontSize: 48, marginBottom: 20 }}>🏗</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: C.ink, marginBottom: 12 }}>채용 페이지를 준비 중입니다</div>
-          <div style={{ marginBottom: 28 }}>관리자 모드에서 회사 정보를 입력해주세요.</div>
-          <button style={S.btn} onClick={onAdminClick}>관리자 모드로 이동</button>
-        </div>
-      ) : (
-        <>
-          {/* 히어로 */}
-          <section style={{ background: `linear-gradient(135deg, ${C.accentLight} 0%, ${C.bg} 60%)`, padding: "80px 40px 72px", textAlign: "center" }}>
-            <div style={{ display: "inline-block", backgroundColor: C.accent, color: "#fff", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", padding: "5px 14px", borderRadius: 20, marginBottom: 20, textTransform: "uppercase" }}>
-              We're Hiring
-            </div>
-            <h1 style={{ fontSize: "clamp(32px, 5vw, 56px)", fontWeight: 800, margin: "0 0 20px", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
-              {company.name}
-            </h1>
-            {company.tagline && (
-              <p style={{ fontSize: 20, color: C.muted, maxWidth: 560, margin: "0 auto 32px", lineHeight: 1.6 }}>{company.tagline}</p>
-            )}
-            <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-              <a href="#positions" style={{ ...S.btn, textDecoration: "none", padding: "13px 32px", fontSize: 15 }}>열린 포지션 보기 →</a>
-              {company.website && (
-                <a href={company.website} target="_blank" rel="noreferrer" style={{ ...S.btnOutline, textDecoration: "none", padding: "12px 28px", fontSize: 15 }}>웹사이트 방문</a>
-              )}
-            </div>
-          </section>
-
-          {/* 회사 소개 */}
-          <section id="about" style={{ padding: "72px 40px", maxWidth: 960, margin: "0 auto" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 48 }}>
-              {company.description && (
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>About</div>
-                  <h2 style={{ fontSize: 26, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>우리는 이런 회사입니다</h2>
-                  <p style={{ color: C.muted, lineHeight: 1.8, fontSize: 15 }}>{company.description}</p>
-                </div>
-              )}
-              {company.culture && (
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>Culture</div>
-                  <h2 style={{ fontSize: 26, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>우리의 문화</h2>
-                  <p style={{ color: C.muted, lineHeight: 1.8, fontSize: 15 }}>{company.culture}</p>
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* 채용 포지션 */}
-          <section id="positions" style={{ backgroundColor: C.surface, padding: "72px 40px" }}>
-            <div style={{ maxWidth: 960, margin: "0 auto" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>Open Roles</div>
-              <h2 style={{ fontSize: 30, fontWeight: 800, margin: "0 0 40px", letterSpacing: "-0.02em" }}>채용 중인 포지션</h2>
-              {positions.length === 0 ? (
-                <div style={{ color: C.muted, textAlign: "center", padding: "40px" }}>현재 채용 중인 포지션이 없습니다.</div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  {positions.map(p => (
-                    <div key={p.id}>
-                      <div onClick={() => setSelected(selected === p.id ? null : p.id)}
-                        style={{ ...S.card, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "box-shadow 0.15s", boxShadow: selected === p.id ? "0 4px 20px rgba(45,91,227,0.1)" : "none", borderColor: selected === p.id ? C.accent : C.border }}>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 17 }}>{p.title}</div>
-                          <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                            {p.team && <span style={{ backgroundColor: C.tag, color: C.muted, fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 6 }}>{p.team}</span>}
-                            {p.type && <span style={{ backgroundColor: C.accentLight, color: C.accent, fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 6 }}>{p.type}</span>}
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                          <button onClick={e => { e.stopPropagation(); setApplyPos(p); }} style={S.btn}>지원하기</button>
-                          <span style={{ color: C.muted, fontSize: 18 }}>{selected === p.id ? "▲" : "▼"}</span>
-                        </div>
-                      </div>
-                      {selected === p.id && (
-                        <div style={{ border: `1px solid ${C.border}`, borderTop: "none", borderRadius: "0 0 12px 12px", padding: "24px 28px", backgroundColor: C.surface }}>
-                          {p.description && <div style={{ marginBottom: 20 }}><div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 8, textTransform: "uppercase" }}>직무 소개</div><p style={{ margin: 0, lineHeight: 1.8, color: C.ink }}>{p.description}</p></div>}
-                          {p.requirements && <div style={{ marginBottom: 20 }}><div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 8, textTransform: "uppercase" }}>자격 요건</div><p style={{ margin: 0, lineHeight: 1.8, whiteSpace: "pre-line", color: C.ink }}>{p.requirements}</p></div>}
-                          {p.preferred && <div><div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 8, textTransform: "uppercase" }}>우대 사항</div><p style={{ margin: 0, lineHeight: 1.8, whiteSpace: "pre-line", color: C.ink }}>{p.preferred}</p></div>}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* 면접 프로세스 */}
-          <section id="process" style={{ padding: "72px 40px" }}>
-            <div style={{ maxWidth: 960, margin: "0 auto" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>Process</div>
-              <h2 style={{ fontSize: 30, fontWeight: 800, margin: "0 0 12px", letterSpacing: "-0.02em" }}>채용 프로세스</h2>
-              {process.duration && <p style={{ color: C.muted, marginBottom: 40, fontSize: 15 }}>⏱ {process.duration}</p>}
-              <div style={{ display: "flex", gap: 0, overflowX: "auto", paddingBottom: 8 }}>
-                {process.steps.map((step, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-                    <div style={{ textAlign: "center" }}>
-                      <div style={{ width: 44, height: 44, borderRadius: "50%", backgroundColor: C.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 15, margin: "0 auto 10px" }}>{i + 1}</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, maxWidth: 90, textAlign: "center", lineHeight: 1.4 }}>{step}</div>
-                    </div>
-                    {i < process.steps.length - 1 && <div style={{ width: 40, height: 2, backgroundColor: C.border, margin: "0 4px", marginBottom: 24, flexShrink: 0 }} />}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* 처우 기준 */}
-          {(offer.salary || offer.benefits) && (
-            <section style={{ backgroundColor: C.surface, padding: "72px 40px" }}>
-              <div style={{ maxWidth: 960, margin: "0 auto" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>Compensation</div>
-                <h2 style={{ fontSize: 30, fontWeight: 800, margin: "0 0 40px", letterSpacing: "-0.02em" }}>처우 및 복리후생</h2>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
-                  {offer.salary && <div style={{ ...S.card }}>
-                    <div style={{ fontSize: 20, marginBottom: 12 }}>💰</div>
-                    <div style={{ fontWeight: 700, marginBottom: 8 }}>급여 정책</div>
-                    <p style={{ color: C.muted, lineHeight: 1.8, margin: 0, fontSize: 14 }}>{offer.salary}</p>
-                  </div>}
-                  {offer.benefits && <div style={{ ...S.card }}>
-                    <div style={{ fontSize: 20, marginBottom: 12 }}>🎁</div>
-                    <div style={{ fontWeight: 700, marginBottom: 8 }}>복리후생</div>
-                    <p style={{ color: C.muted, lineHeight: 1.8, margin: 0, fontSize: 14, whiteSpace: "pre-line" }}>{offer.benefits}</p>
-                  </div>}
-                  {offer.extra && <div style={{ ...S.card, gridColumn: "1/-1" }}>
-                    <div style={{ fontWeight: 700, marginBottom: 8 }}>📌 기타 안내</div>
-                    <p style={{ color: C.muted, lineHeight: 1.8, margin: 0, fontSize: 14 }}>{offer.extra}</p>
-                  </div>}
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* 푸터 */}
-          <footer style={{ padding: "40px", textAlign: "center", color: C.muted, fontSize: 13, borderTop: `1px solid ${C.border}` }}>
-            © {new Date().getFullYear()} {company.name}. All rights reserved.
-          </footer>
-        </>
-      )}
-
-      {applyPos && <ApplyModal position={applyPos} companyName={company.name} onClose={() => setApplyPos(null)} />}
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-//  APP ROOT
-// ═══════════════════════════════════════════════════════════════════════
-export default function App() {
-  const [mode, setMode] = useState("public"); // "public" | "admin"
-  const [data, setData] = useState(DEFAULT_DATA);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) setData(JSON.parse(stored));
-    } catch {}
-  }, []);
-
-  const handleSave = (newData) => {
-    setData(newData);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(newData)); } catch {}
-    setMode("public");
-  };
-
-  if (mode === "admin") return <AdminPage data={data} onSave={handleSave} />;
-  return <PublicPage data={data} onAdminClick={() => setMode("admin")} />;
 }
