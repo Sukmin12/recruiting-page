@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 // ── 색상 ──────────────────────────────────────────────────────────────
 const C = {
@@ -577,7 +577,7 @@ function TodoManager() {
     save("hr-todos", updated);
   };
 
-  const filtered = todos.filter(t => filter === "전체" ? true : filter === "완료" ? t.done : !t.done && t.category === filter || filter === "미완료" && !t.done);
+  const filtered = todos.filter(t => filter === "전체" ? true : filter === "완료" ? t.done : (filter === "미완료" ? !t.done : (!t.done && t.category === filter)));
   const priorityColor = (p) => p === "높음" ? { color: C.red, bg: C.redLight } : p === "낮음" ? { color: C.muted, bg: C.bg } : { color: C.yellow, bg: C.yellowLight };
 
   return (
