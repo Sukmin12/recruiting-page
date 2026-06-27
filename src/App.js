@@ -220,14 +220,33 @@ function AdminPage({ data, onSave }) {
 // ═══════════════════════════════════════════════════════════════════════
 //  APPLY FORM — 지원 폼 모달
 // ═══════════════════════════════════════════════════════════════════════
+// ⚠️ 여기에 본인의 Apps Script URL 붙여넣기
+const SHEETS_URL = "https://script.google.com/macros/s/AKfycbz2-vOTwX-EEKYNtwM4gwsXpzRaZSm0tXp9mNqTIpVu11mYBmJ1HhWeVj3EwH4qt_Aq/exec";
+
 function ApplyModal({ position, companyName, onClose }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", currentCompany: "", experience: "", portfolio: "", motivation: "" });
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const setF = (f, v) => setForm(p => ({ ...p, [f]: v }));
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.name || !form.email) return;
-    setSubmitted(true);
+    setLoading(true);
+    setError("");
+    try {
+      await fetch(SHEETS_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, position: position.title }),
+      });
+      setSubmitted(true);
+    } catch (e) {
+      setError("제출 중 오류가 발생했습니다. 다시 시도해주세요.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -284,7 +303,10 @@ function ApplyModal({ position, companyName, onClose }) {
               </div>
             </div>
             <div style={{ display: "flex", gap: 12, marginTop: 28 }}>
-              <button style={{ ...S.btn, flex: 1, padding: "13px" }} onClick={handleSubmit}>지원서 제출</button>
+              {error && <div style={{ color: "#E53E3E", fontSize: 13, marginBottom: 8 }}>{error}</div>}
+              <button style={{ ...S.btn, flex: 1, padding: "13px" }} onClick={handleSubmit} disabled={loading}>
+                {loading ? "제출 중..." : "지원서 제출"}
+              </button>
               <button style={{ ...S.btnGhost, padding: "13px 20px" }} onClick={onClose}>취소</button>
             </div>
           </>
