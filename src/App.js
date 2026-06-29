@@ -242,10 +242,11 @@ function EmployeeManager({ employees, setEmployees, w }) {
 
   const remove = (id) => { const u = employees.filter(e => e.id !== id); setEmployees(u); save("hr-employees", u); if (selected === id) setSelected(null); };
 
-  const filtered = employees.filter(e =>
-    (e.name.includes(search) || (e.dept || "").includes(search) || (e.position || "").includes(search)) &&
-    (filterDept === "전체" || e.dept === filterDept)
-  );
+  const filtered = employees.filter(e => {
+    const matchSearch = (e.name.includes(search) || (e.dept || "").includes(search) || (e.position || "").includes(search));
+    const matchDept = (filterDept === "전체" || e.dept === filterDept);
+    return matchSearch && matchDept;
+  });
 
   const sel = employees.find(e => e.id === selected);
 
