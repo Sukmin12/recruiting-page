@@ -1,531 +1,295 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
-// ── 색상 ──────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════
+//  💛 우리 가계부 — 부부 재정 관리
+//  SHEET_URL에 Apps Script 배포 URL을 붙여넣으세요
+// ════════════════════════════════════════════════════════════════════
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbxg4px9rnJnwXORz-Hcv_TZhZzC_jrMH8oRyyW1WrCeEoUcqM661R7bfXc7sawiDQHL/exec";
+
+const won = (n) => `₩${Number(n || 0).toLocaleString("ko-KR")}`;
+const pct = (v, t) => t > 0 ? Math.min(999, Math.round((v / t) * 100)) : 0;
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+const ymKey = (y, m) => `${y}-${String(m).padStart(2, "0")}`;
+const useWidth = () => { const [w, setW] = useState(window.innerWidth); useEffect(() => { const h = () => setW(window.innerWidth); window.addEventListener("resize", h); return () => window.removeEventListener("resize", h); }, []); return w; };
+const isMob = (w) => w < 768;
+const isTab = (w) => w >= 768 && w < 1024;
+const lsave = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+const lload = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
+
+// ─── 테마 ─────────────────────────────────────────────────────────
 const C = {
-  bg: "#F5F7FA", surface: "#FFFFFF", ink: "#111827", muted: "#6B7280",
-  border: "#E5E7EB", primary: "#2563EB", primaryLight: "#EFF6FF",
-  green: "#059669", greenLight: "#ECFDF5", red: "#DC2626", redLight: "#FEF2F2",
-  yellow: "#D97706", yellowLight: "#FFFBEB", purple: "#7C3AED", purpleLight: "#F5F3FF",
-  orange: "#EA580C", orangeLight: "#FFF7ED",
+  gold: "#C9A84C", goldDark: "#7A5C1E", goldDeep: "#3D2B00",
+  goldLight: "#FDF6E3", goldMid: "#EDD98A", goldBorder: "#E8D5A3",
+  bg: "#FAF8F4", surface: "#FFFFFF", ink: "#1C1917", muted: "#92867A", border: "#EDE8E0",
+  green: "#15803D", greenLight: "#DCFCE7",
+  red: "#C0392B", redLight: "#FDECEA",
+  blue: "#1D4ED8", blueLight: "#DBEAFE",
+  purple: "#7C3AED", purpleLight: "#EDE9FE",
+  teal: "#0D9488", tealLight: "#CCFBF1",
+  gradient: "linear-gradient(135deg, #C9A84C 0%, #EDD98A 50%, #A07828 100%)",
+  gradientDark: "linear-gradient(135deg, #1C1917 0%, #3D2B00 100%)",
 };
-
-// ── 반응형 ────────────────────────────────────────────────────────────
-const useWindowWidth = () => {
-  const [w, setW] = useState(window.innerWidth);
-  useEffect(() => {
-    const h = () => setW(window.innerWidth);
-    window.addEventListener("resize", h);
-    return () => window.removeEventListener("resize", h);
-  }, []);
-  return w;
-};
-const mob = (w) => w < 768;
-const tab = (w) => w >= 768 && w < 1024;
-
-// ── 스타일 ────────────────────────────────────────────────────────────
 const S = {
-  input: { width: "100%", boxSizing: "border-box", border: `1.5px solid ${C.border}`, borderRadius: 8, padding: "9px 12px", fontSize: 14, color: C.ink, backgroundColor: C.surface, outline: "none", fontFamily: "inherit" },
-  select: { width: "100%", boxSizing: "border-box", border: `1.5px solid ${C.border}`, borderRadius: 8, padding: "9px 12px", fontSize: 14, color: C.ink, backgroundColor: C.surface, outline: "none", fontFamily: "inherit", cursor: "pointer" },
-  label: { display: "block", fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 4 },
-  btn: { backgroundColor: C.primary, color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
-  btnGhost: { backgroundColor: "transparent", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", fontFamily: "inherit" },
-  btnSm: (color = C.red) => ({ backgroundColor: color, color: "#fff", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }),
-  card: { backgroundColor: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, padding: "20px" },
+  card: { backgroundColor: C.surface, borderRadius: 16, padding: 20, boxShadow: "0 2px 10px rgba(0,0,0,0.06)", marginBottom: 16, border: `1px solid ${C.border}` },
+  input: { width: "100%", padding: "11px 13px", borderRadius: 10, border: `1.5px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", outline: "none", backgroundColor: C.surface, color: C.ink, boxSizing: "border-box" },
+  select: { width: "100%", padding: "11px 13px", borderRadius: 10, border: `1.5px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", outline: "none", backgroundColor: C.surface, color: C.ink },
+  label: { fontSize: 11, fontWeight: 800, color: C.muted, letterSpacing: "0.06em", display: "block", marginBottom: 5, textTransform: "uppercase" },
+  btn: (bg = C.gold) => ({ border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", backgroundColor: bg, color: bg === C.gold ? C.goldDeep : "#fff", boxShadow: bg === C.gold ? "0 3px 10px rgba(201,168,76,0.35)" : "none" }),
+  btnOutline: { border: `1.5px solid ${C.goldBorder}`, borderRadius: 10, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", backgroundColor: "transparent", color: C.gold },
+  btnGhost: { border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", backgroundColor: C.bg, color: C.muted },
+  tag: (color, bg) => ({ display: "inline-flex", alignItems: "center", padding: "3px 10px", borderRadius: 20, fontSize: 11.5, fontWeight: 700, color, backgroundColor: bg }),
 };
 
-// ── 헬퍼 ──────────────────────────────────────────────────────────────
-const load = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
-const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
-const todayStr = () => new Date().toISOString().split("T")[0];
-const daysLeft = (d) => { if (!d) return null; return Math.ceil((new Date(d) - new Date()) / 86400000); };
-const fmt = (d) => { if (!d) return "-"; const dt = new Date(d); return `${dt.getFullYear()}.${String(dt.getMonth()+1).padStart(2,"0")}.${String(dt.getDate()).padStart(2,"0")}`; };
-// 🤖 자동화: 입사일 기준 연차 자동 계산
-const calcLeave = (joinDate) => {
-  if (!joinDate) return 15;
-  const months = Math.floor((new Date() - new Date(joinDate)) / (1000 * 60 * 60 * 24 * 30));
-  if (months < 12) return Math.min(months, 11);
-  const years = Math.floor(months / 12);
-  return Math.min(15 + Math.floor((years - 1) / 2), 25);
+// ─── 카테고리 ─────────────────────────────────────────────────────
+const INCOME_CATS  = ["급여","부업/프리랜서","이자/배당","임대수입","용돈/지원","기타수입"];
+const EXPENSE_CATS = ["식비","외식/카페","교통/주유","주거/관리비","통신비","의료/건강","교육","문화/여가","의류/미용","경조사","쇼핑","보험","기타지출"];
+const SAVINGS_CATS = ["비상금","여행적금","주택청약","펀드/ETF","정기예금","목돈마련","기타저축"];
+const ASSET_CATS   = ["부동산","예금/적금","주식/펀드","연금/보험","현금","기타자산"];
+const LIAB_CATS    = ["주택담보대출","전세자금대출","자동차대출","학자금대출","신용대출","기타부채"];
+const EMO = { "식비":"🍚","외식/카페":"☕","교통/주유":"🚗","주거/관리비":"🏠","통신비":"📱","의료/건강":"💊","교육":"📚","문화/여가":"🎬","의류/미용":"👗","경조사":"🎁","쇼핑":"🛒","보험":"🛡️","기타지출":"📦","급여":"💼","부업/프리랜서":"💻","이자/배당":"📈","임대수입":"🏘️","용돈/지원":"🤝","기타수입":"💰","비상금":"🆘","여행적금":"✈️","주택청약":"🏗️","펀드/ETF":"📊","정기예금":"🏦","목돈마련":"💎","기타저축":"💰","부동산":"🏠","예금/적금":"🏦","주식/펀드":"📈","연금/보험":"🛡️","현금":"💵","기타자산":"💼","주택담보대출":"🏠","전세자금대출":"🔑","자동차대출":"🚗","학자금대출":"📚","신용대출":"💳","기타부채":"📋" };
+
+// ─── 공통 컴포넌트 ────────────────────────────────────────────────
+const Field = ({ label, children }) => <div style={{ marginBottom: 12 }}>{label && <label style={S.label}>{label}</label>}{children}</div>;
+const Grid = ({ cols = 2, children, w }) => <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMob(w) ? 1 : cols}, 1fr)`, gap: 12, marginBottom: 4 }}>{children}</div>;
+const Badge = ({ text, color, bg }) => <span style={S.tag(color, bg)}>{text}</span>;
+const ProgressBar = ({ value, max, color = C.gold, height = 8 }) => {
+  const p = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  return <div style={{ height, backgroundColor: C.border, borderRadius: 99, overflow: "hidden" }}><div style={{ height: "100%", width: `${p}%`, backgroundColor: p >= 100 ? C.red : color, borderRadius: 99, transition: "width 0.4s" }} /></div>;
 };
-// 🤖 자동화: 수습 종료일 자동 계산 (입사일 + 3개월)
-const calcProbation = (joinDate) => {
-  if (!joinDate) return "";
-  const d = new Date(joinDate);
-  d.setMonth(d.getMonth() + 3);
-  return d.toISOString().split("T")[0];
+const SyncBadge = ({ status }) => {
+  const m = { loading: ["⏳", C.muted, "동기화 중"], ok: ["✓", C.green, "동기화됨"], error: ["!", C.red, "오프라인"], local: ["●", C.gold, "로컬"] };
+  const [icon, color, label] = m[status] || m.local;
+  return <span style={{ fontSize: 11, fontWeight: 700, color }}>{icon} {label}</span>;
+};
+const AmountInput = ({ value, onChange, placeholder = "0" }) => <input type="number" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={{ ...S.input, textAlign: "right" }} />;
+const useEscapeClose = (isOpen, onClose) => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const h = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 };
 
-const Badge = ({ text, color = C.primary, bg = C.primaryLight }) => (
-  <span style={{ backgroundColor: bg, color, fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>{text}</span>
-);
+// ─── SVG 바 차트 ─────────────────────────────────────────────────
+const BarChart = ({ data, h = 100, color = C.gold, color2 = null }) => {
+  if (!data || data.length === 0) return null;
+  const vals = data.map(d => d.value || 0);
+  const maxV = Math.max(...vals, 1);
+  const bW = 28, gap = 6;
+  const totalW = data.length * (bW + gap);
+  return (
+    <svg width="100%" viewBox={`0 0 ${totalW} ${h + 24}`} preserveAspectRatio="none" style={{ display: "block" }}>
+      {data.map((d, i) => {
+        const bH = Math.max(2, (d.value / maxV) * h);
+        const b2H = d.value2 ? Math.max(2, (d.value2 / maxV) * h) : 0;
+        const x = i * (bW + gap);
+        return (
+          <g key={i}>
+            {color2 && <rect x={x + bW / 2} y={h - b2H} width={bW / 2 - 1} height={b2H} fill={color2} rx={3} opacity={0.7} />}
+            <rect x={x} y={h - bH} width={color2 ? bW / 2 - 1 : bW} height={bH} fill={color} rx={3} opacity={0.85} />
+            <text x={x + bW / 2} y={h + 16} textAnchor="middle" fontSize="9" fill={C.muted}>{d.label}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+};
 
-const FormField = ({ label, children }) => (
-  <div><label style={S.label}>{label}</label>{children}</div>
-);
+// ─── 무지출 달력 ─────────────────────────────────────────────────
+const ZeroSpendCalendar = ({ expense, year, month }) => {
+  const ym = ymKey(year, month);
+  const mExpense = expense.filter(e => e.yearMonth === ym);
+  const spendDays = new Set(mExpense.map(e => e.date ? e.date.slice(8, 10) : null).filter(Boolean));
+  const firstDay = new Date(year, month - 1, 1).getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
+  const todayDate = isCurrentMonth ? today.getDate() : null;
+  const days = [];
+  for (let i = 0; i < firstDay; i++) days.push(null);
+  for (let d = 1; d <= daysInMonth; d++) days.push(d);
+  const weeks = [];
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+  const zeroSpendDays = [...Array(daysInMonth)].map((_, i) => i + 1).filter(d => !spendDays.has(String(d).padStart(2, "0")) && (!isCurrentMonth || d <= (todayDate || daysInMonth)));
+  const dayLabels = ["일", "월", "화", "수", "목", "금", "토"];
 
-const Grid = ({ cols, mobCols = 1, w, children, gap = 12 }) => (
-  <div style={{ display: "grid", gridTemplateColumns: `repeat(${mob(w) ? mobCols : cols}, 1fr)`, gap, marginBottom: gap }}>
-    {children}
-  </div>
-);
+  return (
+    <div style={S.card}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 15 }}>🗓 무지출 달력</div>
+        <Badge text={`무지출 ${zeroSpendDays.length}일`} color={C.green} bg={C.greenLight} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, textAlign: "center" }}>
+        {dayLabels.map(d => <div key={d} style={{ fontSize: 10, fontWeight: 700, color: C.muted, padding: "4px 0" }}>{d}</div>)}
+        {weeks.map((w, wi) => w.map((d, di) => {
+          if (!d) return <div key={`e${wi}-${di}`} />;
+          const dStr = String(d).padStart(2, "0");
+          const hasSpend = spendDays.has(dStr);
+          const isFuture = isCurrentMonth && d > (todayDate || 0);
+          const isToday = d === todayDate;
+          return (
+            <div key={d} style={{
+              width: "100%", aspectRatio: "1", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 12, fontWeight: isToday ? 900 : 500,
+              backgroundColor: isToday ? C.gold : hasSpend ? C.redLight : isFuture ? "transparent" : C.greenLight,
+              color: isToday ? "#fff" : hasSpend ? C.red : isFuture ? C.border : C.green,
+            }}>{d}</div>
+          );
+        }))}
+      </div>
+    </div>
+  );
+};
+
+// ─── 구글 시트 동기화 ─────────────────────────────────────────────
+let _timers = {};
+const syncSheet = (sheet, rows) => {
+  lsave(`budget-${sheet}`, rows);
+  if (!SHEET_URL) return;
+  clearTimeout(_timers[sheet]);
+  _timers[sheet] = setTimeout(() => {
+    fetch(SHEET_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sheet, rows }) }).catch(() => {});
+  }, 600);
+};
+
+// ─── 월 네비 ──────────────────────────────────────────────────────
+const MonthNav = ({ year, month, onChange }) => {
+  const prev = () => month === 1 ? onChange(year - 1, 12) : onChange(year, month - 1);
+  const next = () => month === 12 ? onChange(year + 1, 1) : onChange(year, month + 1);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <button onClick={prev} style={{ border: "none", background: "none", fontSize: 22, cursor: "pointer", color: C.gold, padding: "2px 8px", lineHeight: 1 }}>‹</button>
+      <div style={{ fontWeight: 900, fontSize: 16, minWidth: 100, textAlign: "center" }}>{year}년 {month}월</div>
+      <button onClick={next} style={{ border: "none", background: "none", fontSize: 22, cursor: "pointer", color: C.gold, padding: "2px 8px", lineHeight: 1 }}>›</button>
+    </div>
+  );
+};
 
 // ════════════════════════════════════════════════════════════════════
-//  대시보드 — 자동화 알림 + 통계 + 이번달 일정
+//  대시보드
 // ════════════════════════════════════════════════════════════════════
-function Dashboard({ employees, todos, candidates, attendances, events, w }) {
-  const isMob = mob(w);
+function Dashboard({ income, expense, savings, budget, fixedCosts, assets, year, month, w }) {
+  const mob = isMob(w);
+  const ym = ymKey(year, month);
+  const mIncome  = income.filter(i => i.yearMonth === ym);
+  const mExpense = expense.filter(e => e.yearMonth === ym);
+  const mSavings = savings.filter(s => s.yearMonth === ym);
+  const totalIn  = mIncome.reduce((s, i) => s + Number(i.amount), 0);
+  const totalEx  = mExpense.reduce((s, e) => s + Number(e.amount), 0);
+  const totalSv  = mSavings.reduce((s, sv) => s + Number(sv.amount), 0);
+  const net      = totalIn - totalEx - totalSv;
+  const savingsRate = totalIn > 0 ? Math.round((totalSv / totalIn) * 100) : 0;
+  const expByCat = {};
+  mExpense.forEach(e => { expByCat[e.category] = (expByCat[e.category] || 0) + Number(e.amount); });
+  const mBudget = budget.filter(b => b.yearMonth === ym);
+  const activeFixed = fixedCosts.filter(f => f.active);
+  const topCats = Object.entries(expByCat).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-  // 🤖 자동화: 모든 알림 자동 생성
-  const alerts = [];
-  employees.forEach(e => {
-    const pd = daysLeft(e.probationEnd);
-    const cd = daysLeft(e.contractEnd);
-    if (pd !== null && pd <= 30 && pd >= 0) alerts.push({ level: pd <= 7 ? "긴급" : "주의", type: "수습종료", name: e.name, days: pd, color: C.yellow, bg: C.yellowLight });
-    if (cd !== null && cd <= 30 && cd >= 0) alerts.push({ level: cd <= 7 ? "긴급" : "주의", type: "계약만료", name: e.name, days: cd, color: C.red, bg: C.redLight });
-    const lr = (e.leaveTotal || 15) - (e.leaveUsed || 0);
-    if (lr <= 3) alerts.push({ level: "주의", type: "연차부족", name: e.name, days: null, color: C.purple, bg: C.purpleLight, extra: `잔여 ${lr}일` });
+  // 연간 추이 (현재 연도 12개월)
+  const monthlyData = Array.from({ length: 12 }, (_, i) => {
+    const k = ymKey(year, i + 1);
+    const inc = income.filter(x => x.yearMonth === k).reduce((s, x) => s + Number(x.amount), 0);
+    const exp = expense.filter(x => x.yearMonth === k).reduce((s, x) => s + Number(x.amount), 0);
+    return { label: `${i + 1}월`, value: inc, value2: exp };
   });
-  // 🤖 자동화: 마감 임박 Todo 자동 알림
-  todos.filter(t => !t.done && t.dueDate && daysLeft(t.dueDate) <= 1).forEach(t => {
-    alerts.push({ level: "긴급", type: "업무마감", name: t.text, days: daysLeft(t.dueDate), color: C.orange, bg: C.orangeLight });
-  });
 
-  alerts.sort((a, b) => (a.level === "긴급" ? -1 : 1));
-
-  // 🤖 자동화: 이번달 입퇴사 자동 집계
-  const thisMonth = new Date().toISOString().slice(0, 7);
-  const newJoins = employees.filter(e => e.joinDate && e.joinDate.startsWith(thisMonth)).length;
-  const hiringActive = candidates.filter(c => c.status !== "불합격" && c.status !== "최종합격").length;
-
-  // 🤖 자동화: 이번달 급여 체크리스트 자동 생성
-  const payrollChecks = [
-    { text: "급여 명세서 발송", done: false },
-    { text: "4대보험 납부 확인", done: false },
-    { text: "퇴직금 정산 (해당자)", done: false },
-    { text: "연장근무수당 계산", done: false },
-  ];
-
-  const stats = [
-    { label: "전체 직원", value: employees.length, sub: `이번달 입사 ${newJoins}명`, color: C.primary, bg: C.primaryLight, icon: "👥" },
-    { label: "진행 중 채용", value: hiringActive, sub: `전체 ${candidates.length}명`, color: C.green, bg: C.greenLight, icon: "📋" },
-    { label: "미완료 Todo", value: todos.filter(t => !t.done).length, sub: `전체 ${todos.length}건`, color: C.yellow, bg: C.yellowLight, icon: "✅" },
-    { label: "긴급 알림", value: alerts.filter(a => a.level === "긴급").length, sub: `전체 ${alerts.length}건`, color: C.red, bg: C.redLight, icon: "🚨" },
-  ];
-
-  // 이번달 주요 일정
-  const thisMonthEvents = events.filter(e => e.date && e.date.startsWith(thisMonth)).sort((a, b) => a.date.localeCompare(b.date));
+  // 순자산 (가장 최근 입력된 달 기준)
+  const latestYm = assets.length > 0 ? [...new Set(assets.map(a => a.yearMonth))].sort().reverse()[0] : null;
+  const latestAssets = latestYm ? assets.filter(a => a.yearMonth === latestYm) : [];
+  const totalAssets = latestAssets.filter(a => a.atype === "자산").reduce((s, a) => s + Number(a.amount), 0);
+  const totalLiab   = latestAssets.filter(a => a.atype === "부채").reduce((s, a) => s + Number(a.amount), 0);
+  const netWorth    = totalAssets - totalLiab;
 
   return (
     <div>
-      <div style={{ marginBottom: 20 }}>
-        <h2 style={{ margin: "0 0 4px", fontSize: isMob ? 20 : 24, fontWeight: 800 }}>대시보드</h2>
-        <div style={{ fontSize: 13, color: C.muted }}>{fmt(todayStr())} 기준 자동 업데이트</div>
+      {/* Hero */}
+      <div style={{ background: C.gradientDark, borderRadius: 18, padding: mob ? "22px 20px" : "28px", marginBottom: 16, position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: -20, right: -20, width: 120, height: 120, borderRadius: "50%", background: "rgba(201,168,76,0.15)" }} />
+        <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: "0.1em", marginBottom: 6 }}>NET BALANCE · {year}년 {month}월</div>
+        <div style={{ fontSize: mob ? 30 : 38, fontWeight: 900, color: net >= 0 ? "#EDD98A" : C.red, marginBottom: 6 }}>{won(net)}</div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>수입 {won(totalIn)}</span>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>지출 {won(totalEx)}</span>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>저축 {won(totalSv)}</span>
+          <span style={{ fontSize: 12, color: "#EDD98A", fontWeight: 700 }}>저축률 {savingsRate}%</span>
+        </div>
       </div>
 
-      {/* 통계 */}
-      <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr 1fr" : "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
-        {stats.map(s => (
-          <div key={s.label} style={{ backgroundColor: s.bg, borderRadius: 12, padding: isMob ? "14px 12px" : "20px", border: "none" }}>
-            <div style={{ fontSize: isMob ? 22 : 26, marginBottom: 6 }}>{s.icon}</div>
-            <div style={{ fontSize: isMob ? 26 : 30, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.value}</div>
-            <div style={{ fontSize: 12, color: s.color, fontWeight: 600, marginTop: 4 }}>{s.label}</div>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{s.sub}</div>
+      {/* 요약 카드 */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+        {[
+          { label: "총 수입", amount: totalIn, color: C.green, bg: C.greenLight, icon: "💰" },
+          { label: "총 지출", amount: totalEx, color: C.red, bg: C.redLight, icon: "💸" },
+          { label: `저축 (${savingsRate}%)`, amount: totalSv, color: C.blue, bg: C.blueLight, icon: "🏦" },
+          { label: "순자산", amount: netWorth, color: C.gold, bg: C.goldLight, icon: "🏛" },
+        ].map(c => (
+          <div key={c.label} style={{ backgroundColor: c.bg, borderRadius: 14, padding: "14px 16px" }}>
+            <div style={{ fontSize: 18, marginBottom: 6 }}>{c.icon}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: c.color, marginBottom: 4 }}>{c.label}</div>
+            <div style={{ fontSize: mob ? 14 : 16, fontWeight: 900, color: c.color }}>{won(c.amount)}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 16 }}>
-        {/* 🚨 긴급 알림 */}
+      {/* 연간 수입/지출 추이 */}
+      <div style={S.card}>
+        <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 14 }}>📈 {year}년 월별 추이</div>
+        <div style={{ display: "flex", gap: 12, marginBottom: 10 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: C.gold }}><span style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: C.gold, display: "inline-block" }} />수입</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: C.red }}><span style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: C.red, display: "inline-block" }} />지출</span>
+        </div>
+        <BarChart data={monthlyData} h={90} color={C.gold} color2={C.red} />
+      </div>
+
+      {/* 예산 현황 */}
+      {mBudget.length > 0 && (
         <div style={S.card}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12, display: "flex", justifyContent: "space-between" }}>
-            <span>🚨 알림센터</span>
-            <Badge text={`${alerts.length}건`} color={alerts.length > 0 ? C.red : C.green} bg={alerts.length > 0 ? C.redLight : C.greenLight} />
-          </div>
-          {alerts.length === 0 ? (
-            <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: "20px 0" }}>모든 업무 정상 ✅</div>
-          ) : alerts.map((a, i) => (
-            <div key={i} style={{ backgroundColor: a.bg, borderRadius: 8, padding: "10px 12px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                <Badge text={a.level} color={a.level === "긴급" ? C.red : C.yellow} bg="rgba(0,0,0,0.06)" />
-                <Badge text={a.type} color={a.color} bg="transparent" />
-                <span style={{ fontSize: 13, fontWeight: 600 }}>{a.name}</span>
-                {a.extra && <span style={{ fontSize: 12, color: a.color }}>{a.extra}</span>}
-              </div>
-              {a.days !== null && <span style={{ fontSize: 12, fontWeight: 800, color: a.color }}>{a.days <= 0 ? "오늘!" : `D-${a.days}`}</span>}
-            </div>
-          ))}
-        </div>
-
-        {/* 이번달 일정 */}
-        <div style={S.card}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>📅 이번달 주요 일정</div>
-          {thisMonthEvents.length === 0 ? (
-            <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: "20px 0" }}>등록된 일정이 없습니다</div>
-          ) : thisMonthEvents.map(e => (
-            <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ backgroundColor: C.primaryLight, borderRadius: 6, padding: "4px 8px", textAlign: "center", flexShrink: 0 }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: C.primary }}>{e.date.slice(8)}</div>
-                <div style={{ fontSize: 10, color: C.muted }}>일</div>
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{e.title}</div>
-                {e.desc && <div style={{ fontSize: 11, color: C.muted }}>{e.desc}</div>}
-              </div>
-              <Badge text={e.category} color={C.primary} bg={C.primaryLight} />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 1fr", gap: 16 }}>
-        {/* 미완료 Todo */}
-        <div style={S.card}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>✅ 긴급 업무</div>
-          {todos.filter(t => !t.done && t.priority === "높음").length === 0 ? (
-            <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: "16px 0" }}>긴급 업무 없음 🎉</div>
-          ) : todos.filter(t => !t.done && t.priority === "높음").slice(0, 5).map(t => (
-            <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: `1px solid ${C.border}`, flexWrap: "wrap" }}>
-              <Badge text={t.category} color={C.primary} bg={C.primaryLight} />
-              <span style={{ fontSize: 13, flex: 1, minWidth: 80 }}>{t.text}</span>
-              {t.dueDate && <span style={{ fontSize: 11, color: daysLeft(t.dueDate) <= 1 ? C.red : C.muted, fontWeight: 600 }}>{fmt(t.dueDate)}</span>}
-            </div>
-          ))}
-        </div>
-
-        {/* 🤖 자동화: 이번달 급여 체크리스트 */}
-        <div style={S.card}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>💰 이번달 급여 업무</div>
-          {payrollChecks.map((p, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${C.border}`, flexShrink: 0 }} />
-              <span style={{ fontSize: 13 }}>{p.text}</span>
-            </div>
-          ))}
-          <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>🤖 매월 자동 생성</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════
-//  직원 관리 — 자동화 강화
-// ════════════════════════════════════════════════════════════════════
-function EmployeeManager({ employees, setEmployees, w }) {
-  const isMob = mob(w);
-  const [adding, setAdding] = useState(false);
-  const [selected, setSelected] = useState(null);
-  const [search, setSearch] = useState("");
-  const [filterDept, setFilterDept] = useState("전체");
-  const initForm = { name: "", dept: "", position: "", joinDate: "", employType: "정규직", probationEnd: "", contractEnd: "", leaveTotal: 15, leaveUsed: 0, phone: "", email: "", birthday: "", note: "" };
-  const [form, setForm] = useState(initForm);
-  const setF = (f, v) => setForm(p => ({ ...p, [f]: v }));
-
-  // 🤖 자동화: 입사일 입력 시 수습종료일 + 연차 자동 계산
-  const handleJoinDate = (v) => {
-    setF("joinDate", v);
-    if (v) {
-      setF("probationEnd", calcProbation(v));
-      setF("leaveTotal", calcLeave(v));
-    }
-  };
-
-  const depts = ["전체", ...new Set(employees.map(e => e.dept).filter(Boolean))];
-
-  const add = () => {
-    if (!form.name) return;
-    const lr = form.leaveTotal - form.leaveUsed;
-    const u = [...employees, { ...form, id: Date.now(), leaveRemain: lr, history: [{ date: todayStr(), action: "입사 등록" }] }];
-    setEmployees(u); save("hr-employees", u);
-    setForm(initForm); setAdding(false);
-  };
-
-  const remove = (id) => { const u = employees.filter(e => e.id !== id); setEmployees(u); save("hr-employees", u); if (selected === id) setSelected(null); };
-
-  const filtered = employees.filter(e => {
-    const matchSearch = (e.name.includes(search) || (e.dept || "").includes(search) || (e.position || "").includes(search));
-    const matchDept = (filterDept === "전체" || e.dept === filterDept);
-    return matchSearch && matchDept;
-  });
-
-  const sel = employees.find(e => e.id === selected);
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-        <h2 style={{ margin: 0, fontSize: isMob ? 20 : 24, fontWeight: 800 }}>직원 관리 <span style={{ fontSize: 14, color: C.muted, fontWeight: 400 }}>총 {employees.length}명</span></h2>
-        <button style={S.btn} onClick={() => setAdding(!adding)}>+ 직원 추가</button>
-      </div>
-
-      {adding && (
-        <div style={{ ...S.card, marginBottom: 20, backgroundColor: C.primaryLight, border: `1.5px solid ${C.primary}` }}>
-          <div style={{ fontWeight: 700, marginBottom: 16 }}>새 직원 등록</div>
-          <Grid cols={3} w={w}>
-            <FormField label="이름 *"><input style={S.input} value={form.name} onChange={e => setF("name", e.target.value)} placeholder="홍길동" /></FormField>
-            <FormField label="부서"><input style={S.input} value={form.dept} onChange={e => setF("dept", e.target.value)} placeholder="인사팀" /></FormField>
-            <FormField label="직급/직책"><input style={S.input} value={form.position} onChange={e => setF("position", e.target.value)} placeholder="대리" /></FormField>
-          </Grid>
-          <Grid cols={3} w={w}>
-            <FormField label="입사일 🤖 (입력 시 수습/연차 자동계산)">
-              <input type="date" style={S.input} value={form.joinDate} onChange={e => handleJoinDate(e.target.value)} />
-            </FormField>
-            <FormField label="고용형태">
-              <select style={S.select} value={form.employType} onChange={e => setF("employType", e.target.value)}>
-                {["정규직","계약직","인턴","파견직","프리랜서"].map(t => <option key={t}>{t}</option>)}
-              </select>
-            </FormField>
-            <FormField label="수습 종료일 🤖 (자동계산됨)">
-              <input type="date" style={S.input} value={form.probationEnd} onChange={e => setF("probationEnd", e.target.value)} />
-            </FormField>
-          </Grid>
-          <Grid cols={3} w={w}>
-            <FormField label="계약 만료일">
-              <input type="date" style={S.input} value={form.contractEnd} onChange={e => setF("contractEnd", e.target.value)} />
-            </FormField>
-            <FormField label="연차 총일수 🤖 (자동계산됨)">
-              <input type="number" style={S.input} value={form.leaveTotal} onChange={e => setF("leaveTotal", Number(e.target.value))} />
-            </FormField>
-            <FormField label="사용 연차">
-              <input type="number" style={S.input} value={form.leaveUsed} onChange={e => setF("leaveUsed", Number(e.target.value))} />
-            </FormField>
-          </Grid>
-          <Grid cols={3} w={w}>
-            <FormField label="연락처"><input style={S.input} value={form.phone} onChange={e => setF("phone", e.target.value)} placeholder="010-0000-0000" /></FormField>
-            <FormField label="이메일"><input style={S.input} value={form.email} onChange={e => setF("email", e.target.value)} placeholder="이메일" /></FormField>
-            <FormField label="생년월일"><input type="date" style={S.input} value={form.birthday} onChange={e => setF("birthday", e.target.value)} /></FormField>
-          </Grid>
-          <FormField label="특이사항/메모"><input style={S.input} value={form.note} onChange={e => setF("note", e.target.value)} placeholder="메모" /></FormField>
-          <div style={{ display: "flex", gap: 8, marginTop: 16 }}><button style={S.btn} onClick={add}>저장</button><button style={S.btnGhost} onClick={() => setAdding(false)}>취소</button></div>
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-        <input style={{ ...S.input, flex: 1, minWidth: 160 }} placeholder="이름/부서/직급 검색" value={search} onChange={e => setSearch(e.target.value)} />
-        <select style={{ ...S.select, width: "auto" }} value={filterDept} onChange={e => setFilterDept(e.target.value)}>
-          {depts.map(d => <option key={d}>{d}</option>)}
-        </select>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : sel ? "1fr 320px" : "1fr", gap: 16 }}>
-        {/* 목록 */}
-        <div>
-          {isMob ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {filtered.map(e => {
-                const lr = (e.leaveTotal || 15) - (e.leaveUsed || 0);
-                const pd = daysLeft(e.probationEnd);
-                const cd = daysLeft(e.contractEnd);
-                return (
-                  <div key={e.id} style={{ ...S.card, cursor: "pointer", border: `1.5px solid ${selected === e.id ? C.primary : C.border}` }} onClick={() => setSelected(selected === e.id ? null : e.id)}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                      <div>
-                        <span style={{ fontWeight: 700, fontSize: 15 }}>{e.name}</span>
-                        <span style={{ color: C.muted, fontSize: 13, marginLeft: 8 }}>{e.dept} · {e.position}</span>
-                      </div>
-                      <Badge text={e.employType} color={e.employType === "정규직" ? C.green : C.yellow} bg={e.employType === "정규직" ? C.greenLight : C.yellowLight} />
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontSize: 12 }}>
-                      <div><span style={{ color: C.muted }}>입사: </span>{fmt(e.joinDate)}</div>
-                      <div><span style={{ color: C.muted }}>연차: </span><span style={{ color: lr <= 3 ? C.red : C.green, fontWeight: 700 }}>{lr}일</span>/{e.leaveTotal}일</div>
-                      {e.probationEnd && pd !== null && pd >= 0 && <div style={{ color: C.yellow, fontWeight: 600 }}>수습 D-{pd}</div>}
-                      {e.contractEnd && cd !== null && cd >= 0 && cd <= 30 && <div style={{ color: C.red, fontWeight: 600 }}>계약 D-{cd}</div>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div style={{ ...S.card, padding: 0, overflow: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 680 }}>
-                <thead>
-                  <tr style={{ backgroundColor: C.bg }}>
-                    {["이름","부서","직급","고용형태","입사일","수습 D-day","계약 D-day","잔여연차","연락처",""].map(h => (
-                      <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: C.muted, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap", fontSize: 12 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.length === 0 ? <tr><td colSpan={10} style={{ padding: 40, textAlign: "center", color: C.muted }}>등록된 직원이 없습니다</td></tr>
-                  : filtered.map(e => {
-                    const lr = (e.leaveTotal || 15) - (e.leaveUsed || 0);
-                    const pd = daysLeft(e.probationEnd);
-                    const cd = daysLeft(e.contractEnd);
-                    return (
-                      <tr key={e.id} onClick={() => setSelected(selected === e.id ? null : e.id)} style={{ borderBottom: `1px solid ${C.border}`, cursor: "pointer", backgroundColor: selected === e.id ? C.primaryLight : "transparent" }}>
-                        <td style={{ padding: "11px 12px", fontWeight: 600 }}>{e.name}</td>
-                        <td style={{ padding: "11px 12px", color: C.muted }}>{e.dept || "-"}</td>
-                        <td style={{ padding: "11px 12px", color: C.muted }}>{e.position || "-"}</td>
-                        <td style={{ padding: "11px 12px" }}><Badge text={e.employType} color={e.employType === "정규직" ? C.green : C.yellow} bg={e.employType === "정규직" ? C.greenLight : C.yellowLight} /></td>
-                        <td style={{ padding: "11px 12px", color: C.muted, whiteSpace: "nowrap" }}>{fmt(e.joinDate)}</td>
-                        <td style={{ padding: "11px 12px" }}>{e.probationEnd ? <span style={{ color: pd !== null && pd <= 7 ? C.red : pd !== null && pd <= 30 ? C.yellow : C.muted, fontWeight: 600 }}>{pd !== null && pd >= 0 ? `D-${pd}` : "완료"}</span> : "-"}</td>
-                        <td style={{ padding: "11px 12px" }}>{e.contractEnd ? <span style={{ color: cd !== null && cd <= 30 ? C.red : C.muted, fontWeight: cd !== null && cd <= 30 ? 700 : 400 }}>{cd !== null && cd >= 0 ? `D-${cd}` : "만료"}</span> : "-"}</td>
-                        <td style={{ padding: "11px 12px" }}><span style={{ color: lr <= 3 ? C.red : C.green, fontWeight: 700 }}>{lr}</span><span style={{ color: C.muted, fontSize: 11 }}>/{e.leaveTotal}</span></td>
-                        <td style={{ padding: "11px 12px", color: C.muted }}>{e.phone || "-"}</td>
-                        <td style={{ padding: "11px 12px" }}><button style={S.btnSm()} onClick={ev => { ev.stopPropagation(); remove(e.id); }}>삭제</button></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* 직원 상세 패널 */}
-        {sel && (
-          <div style={S.card}>
-            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{sel.name}</div>
-            <div style={{ color: C.muted, fontSize: 13, marginBottom: 16 }}>{sel.dept} · {sel.position}</div>
-            {[["연락처", sel.phone], ["이메일", sel.email], ["생년월일", fmt(sel.birthday)], ["입사일", fmt(sel.joinDate)], ["고용형태", sel.employType], ["수습종료", `${fmt(sel.probationEnd)} (D-${daysLeft(sel.probationEnd) ?? "-"})`], ["계약만료", sel.contractEnd ? `${fmt(sel.contractEnd)} (D-${daysLeft(sel.contractEnd) ?? "-"})` : "-"], ["연차현황", `잔여 ${(sel.leaveTotal||15)-(sel.leaveUsed||0)}일 / 총 ${sel.leaveTotal}일`]].map(([l, v]) => (
-              <div key={l} style={{ display: "flex", gap: 8, padding: "8px 0", borderBottom: `1px solid ${C.border}`, fontSize: 13 }}>
-                <span style={{ color: C.muted, width: 70, flexShrink: 0 }}>{l}</span>
-                <span style={{ fontWeight: 500 }}>{v || "-"}</span>
-              </div>
-            ))}
-            {sel.note && <div style={{ marginTop: 12, fontSize: 13, color: C.muted, backgroundColor: C.bg, borderRadius: 8, padding: 12 }}>{sel.note}</div>}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════
-//  채용 관리
-// ════════════════════════════════════════════════════════════════════
-function RecruitManager({ candidates, setCandidates, w }) {
-  const isMob = mob(w);
-  const [adding, setAdding] = useState(false);
-  const [filterStage, setFilterStage] = useState("전체");
-  const initForm = { name: "", position: "", appliedDate: todayStr(), status: "서류검토", phone: "", email: "", source: "채용사이트", note: "" };
-  const [form, setForm] = useState(initForm);
-  const setF = (f, v) => setForm(p => ({ ...p, [f]: v }));
-  const stages = ["서류검토","전화스크리닝","1차면접","2차면접","처우협의","최종합격","불합격"];
-  const sources = ["채용사이트","헤드헌팅","내부추천","링크드인","워크넷","기타"];
-  const sc = (s) => s === "최종합격" ? { color: C.green, bg: C.greenLight } : s === "불합격" ? { color: C.red, bg: C.redLight } : s === "처우협의" ? { color: C.purple, bg: C.purpleLight } : s === "2차면접" || s === "1차면접" ? { color: C.orange, bg: C.orangeLight } : { color: C.primary, bg: C.primaryLight };
-
-  const add = () => {
-    if (!form.name || !form.position) return;
-    // 🤖 자동화: 등록 시 날짜 자동 기록
-    const u = [...candidates, { ...form, id: Date.now(), history: [{ date: todayStr(), action: "지원 접수" }] }];
-    setCandidates(u); save("hr-candidates", u);
-    setForm(initForm); setAdding(false);
-  };
-
-  // 🤖 자동화: 단계 변경 시 날짜 자동 기록
-  const updateStatus = (id, status) => {
-    const u = candidates.map(c => c.id === id ? {
-      ...c, status,
-      history: [...(c.history || []), { date: todayStr(), action: `${status} 단계로 변경` }]
-    } : c);
-    setCandidates(u); save("hr-candidates", u);
-  };
-  const remove = (id) => { const u = candidates.filter(c => c.id !== id); setCandidates(u); save("hr-candidates", u); };
-
-  const filtered = filterStage === "전체" ? candidates : candidates.filter(c => c.status === filterStage);
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-        <h2 style={{ margin: 0, fontSize: isMob ? 20 : 24, fontWeight: 800 }}>채용 관리</h2>
-        <button style={S.btn} onClick={() => setAdding(!adding)}>+ 지원자 추가</button>
-      </div>
-
-      {/* 🤖 자동화: 단계별 현황 자동 집계 */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
-        {["전체", ...stages].map(s => {
-          const count = s === "전체" ? candidates.length : candidates.filter(c => c.status === s).length;
-          const color = s === "전체" ? { color: C.ink, bg: C.bg } : sc(s);
-          return (
-            <div key={s} onClick={() => setFilterStage(s)} style={{ flexShrink: 0, backgroundColor: filterStage === s ? color.bg : C.bg, borderRadius: 8, padding: "10px 14px", textAlign: "center", minWidth: 68, cursor: "pointer", border: `1.5px solid ${filterStage === s ? color.color : C.border}` }}>
-              <div style={{ fontSize: 18, fontWeight: 800, color: color.color }}>{count}</div>
-              <div style={{ fontSize: 10, color: color.color, fontWeight: 600 }}>{s}</div>
-            </div>
-          );
-        })}
-      </div>
-
-      {adding && (
-        <div style={{ ...S.card, marginBottom: 20, backgroundColor: C.primaryLight, border: `1.5px solid ${C.primary}` }}>
-          <div style={{ fontWeight: 700, marginBottom: 16 }}>지원자 추가</div>
-          <Grid cols={3} w={w}>
-            <FormField label="이름 *"><input style={S.input} value={form.name} onChange={e => setF("name", e.target.value)} placeholder="홍길동" /></FormField>
-            <FormField label="지원 포지션 *"><input style={S.input} value={form.position} onChange={e => setF("position", e.target.value)} placeholder="프론트엔드 개발자" /></FormField>
-            <FormField label="연락처"><input style={S.input} value={form.phone} onChange={e => setF("phone", e.target.value)} placeholder="010-0000-0000" /></FormField>
-          </Grid>
-          <Grid cols={3} w={w}>
-            <FormField label="이메일"><input style={S.input} value={form.email} onChange={e => setF("email", e.target.value)} /></FormField>
-            <FormField label="지원 경로">
-              <select style={S.select} value={form.source} onChange={e => setF("source", e.target.value)}>
-                {sources.map(s => <option key={s}>{s}</option>)}
-              </select>
-            </FormField>
-            <FormField label="현재 단계">
-              <select style={S.select} value={form.status} onChange={e => setF("status", e.target.value)}>
-                {stages.map(s => <option key={s}>{s}</option>)}
-              </select>
-            </FormField>
-          </Grid>
-          <FormField label="메모/특이사항"><input style={S.input} value={form.note} onChange={e => setF("note", e.target.value)} placeholder="면접 가능 일정, 현재 연봉 등" /></FormField>
-          <div style={{ display: "flex", gap: 8, marginTop: 16 }}><button style={S.btn} onClick={add}>저장</button><button style={S.btnGhost} onClick={() => setAdding(false)}>취소</button></div>
-        </div>
-      )}
-
-      {isMob ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {filtered.map(c => {
-            const color = sc(c.status);
+          <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 14 }}>📋 예산 현황</div>
+          {mBudget.map(b => {
+            const spent = expByCat[b.category] || 0;
             return (
-              <div key={c.id} style={S.card}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div><div style={{ fontWeight: 700 }}>{c.name}</div><div style={{ fontSize: 12, color: C.muted }}>{c.position}</div></div>
-                  <button style={S.btnSm()} onClick={() => remove(c.id)}>삭제</button>
+              <div key={b.id} style={{ marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{EMO[b.category] || ""} {b.category}</span>
+                  <span style={{ fontSize: 12, color: spent > Number(b.budgetAmount) ? C.red : C.muted, fontWeight: 600 }}>{won(spent)} / {won(b.budgetAmount)}</span>
                 </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <select value={c.status} onChange={e => updateStatus(c.id, e.target.value)} style={{ backgroundColor: color.bg, color: color.color, border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                    {stages.map(s => <option key={s}>{s}</option>)}
-                  </select>
-                  <Badge text={c.source || "채용사이트"} color={C.muted} bg={C.bg} />
-                  <span style={{ fontSize: 11, color: C.muted }}>{fmt(c.appliedDate)}</span>
-                </div>
-                {c.note && <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>{c.note}</div>}
+                <ProgressBar value={spent} max={Number(b.budgetAmount)} color={C.gold} />
               </div>
             );
           })}
         </div>
-      ) : (
-        <div style={{ ...S.card, padding: 0, overflow: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 620 }}>
-            <thead>
-              <tr style={{ backgroundColor: C.bg }}>
-                {["이름","포지션","연락처","지원경로","지원일","진행단계","메모",""].map(h => (
-                  <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: C.muted, borderBottom: `1px solid ${C.border}`, fontSize: 12 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: C.muted }}>지원자가 없습니다</td></tr>
-              : filtered.map(c => {
-                const color = sc(c.status);
-                return (
-                  <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={{ padding: "11px 12px", fontWeight: 600 }}>{c.name}</td>
-                    <td style={{ padding: "11px 12px", color: C.muted }}>{c.position}</td>
-                    <td style={{ padding: "11px 12px", color: C.muted }}>{c.phone || "-"}</td>
-                    <td style={{ padding: "11px 12px" }}><Badge text={c.source || "채용사이트"} color={C.muted} bg={C.bg} /></td>
-                    <td style={{ padding: "11px 12px", color: C.muted, whiteSpace: "nowrap" }}>{fmt(c.appliedDate)}</td>
-                    <td style={{ padding: "11px 12px" }}>
-                      <select value={c.status} onChange={e => updateStatus(c.id, e.target.value)} style={{ backgroundColor: color.bg, color: color.color, border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                        {stages.map(s => <option key={s}>{s}</option>)}
-                      </select>
-                    </td>
-                    <td style={{ padding: "11px 12px", color: C.muted, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.note || "-"}</td>
-                    <td style={{ padding: "11px 12px" }}><button style={S.btnSm()} onClick={() => remove(c.id)}>삭제</button></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      )}
+
+      {/* 지출 TOP */}
+      {topCats.length > 0 && (
+        <div style={S.card}>
+          <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 14 }}>💸 지출 상위 항목</div>
+          {topCats.map(([cat, amt], i) => (
+            <div key={cat} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i < topCats.length - 1 ? `1px solid ${C.border}` : "none" }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{EMO[cat] || "📦"} {cat}</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: C.red }}>{won(amt)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 무지출 달력 */}
+      <ZeroSpendCalendar expense={expense} year={year} month={month} />
+
+      {/* 고정비 */}
+      {activeFixed.length > 0 && (
+        <div style={{ ...S.card, border: `1.5px solid ${C.goldBorder}`, backgroundColor: C.goldLight }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontWeight: 800, fontSize: 15 }}>📌 월 고정비</div>
+            <div style={{ fontWeight: 900, color: C.goldDark }}>{won(activeFixed.reduce((s, f) => s + Number(f.amount), 0))}</div>
+          </div>
+          {activeFixed.map((f, i) => (
+            <div key={f.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: i < activeFixed.length - 1 ? `1px solid ${C.goldBorder}` : "none" }}>
+              <span style={{ fontSize: 13 }}>{f.name}</span>
+              <span style={{ fontWeight: 700, fontSize: 13, color: C.goldDark }}>{won(f.amount)}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -533,347 +297,538 @@ function RecruitManager({ candidates, setCandidates, w }) {
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  근태 관리 — 신규
+//  수입 / 지출 / 저축 — 공통 CRUD 팩토리
 // ════════════════════════════════════════════════════════════════════
-function AttendanceManager({ employees, attendances, setAttendances, w }) {
-  const isMob = mob(w);
-  const [form, setForm] = useState({ employeeId: "", type: "연차", startDate: todayStr(), endDate: todayStr(), reason: "" });
-  const setF = (f, v) => setForm(p => ({ ...p, [f]: v }));
-  const types = ["연차","반차(오전)","반차(오후)","병가","경조휴가","공가","출장","재택근무","외출"];
-  const typeColor = (t) => t.includes("연차") || t.includes("반차") ? { color: C.primary, bg: C.primaryLight } : t === "병가" ? { color: C.red, bg: C.redLight } : t === "경조휴가" ? { color: C.purple, bg: C.purpleLight } : { color: C.green, bg: C.greenLight };
-
-  const add = () => {
-    if (!form.employeeId) return;
-    const emp = employees.find(e => e.id === Number(form.employeeId));
-    const u = [...attendances, { ...form, id: Date.now(), employeeName: emp?.name || "" }];
-    setAttendances(u); save("hr-attendances", u);
-    setForm({ employeeId: "", type: "연차", startDate: todayStr(), endDate: todayStr(), reason: "" });
+function TransactionManager({ data, setData, sheetName, year, month, w, config }) {
+  const ym = ymKey(year, month);
+  const mob = isMob(w);
+  const monthData = data.filter(d => d.yearMonth === ym).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const total = monthData.reduce((s, d) => s + Number(d.amount), 0);
+  const [filter, setFilter] = config.filters ? useState("전체") : [null, null]; // eslint-disable-line react-hooks/rules-of-hooks
+  const [form, setForm] = useState({ ...config.blank });
+  const [editId, setEditId] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  useEscapeClose(showForm, () => { setShowForm(false); setEditId(null); setForm({ ...config.blank }); });
+  const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const handleSave = () => {
+    if (!form.amount || !form.description) return;
+    const u = editId ? data.map(d => d.id === editId ? { ...form, id: editId, yearMonth: ym } : d) : [...data, { ...form, id: Date.now(), yearMonth: ym }];
+    setData(u); syncSheet(sheetName, u);
+    setForm({ ...config.blank }); setEditId(null); setShowForm(false);
   };
-  const remove = (id) => { const u = attendances.filter(a => a.id !== id); setAttendances(u); save("hr-attendances", u); };
+  const handleDelete = (id) => { if (!window.confirm("삭제할까요?")) return; const u = data.filter(d => d.id !== id); setData(u); syncSheet(sheetName, u); };
+  const startEdit = (item) => { const f = {}; Object.keys(config.blank).forEach(k => { f[k] = item[k] !== undefined ? item[k] : config.blank[k]; }); setForm(f); setEditId(item.id); setShowForm(true); };
+  const filtered = filter ? monthData.filter(d => filter === "전체" || (config.filterFn && config.filterFn(d, filter))) : monthData;
 
   return (
     <div>
-      <h2 style={{ margin: "0 0 20px", fontSize: isMob ? 20 : 24, fontWeight: 800 }}>근태 관리</h2>
+      {showForm && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 400, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => { setShowForm(false); setEditId(null); setForm({ ...config.blank }); }}>
+          <div style={{ backgroundColor: C.surface, borderRadius: 16, padding: 26, width: "100%", maxWidth: 440, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontWeight: 800, fontSize: 17 }}>{editId ? `${config.title} 수정` : `${config.title} 추가`}</div>
+              <button onClick={() => { setShowForm(false); setEditId(null); setForm({ ...config.blank }); }} style={{ border: "none", background: C.bg, color: C.muted, width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>×</button>
+            </div>
+            <Grid cols={2} w={w}>
+              <Field label="카테고리"><select style={S.select} value={form.category} onChange={e => setF("category", e.target.value)}>{config.cats.map(c => <option key={c}>{c}</option>)}</select></Field>
+              <Field label="날짜"><input type="date" style={S.input} value={form.date} onChange={e => setF("date", e.target.value)} /></Field>
+            </Grid>
+            <Field label="항목명"><input style={S.input} placeholder={config.placeholder || "항목명"} value={form.description} onChange={e => setF("description", e.target.value)} autoFocus /></Field>
+            <Field label="금액"><AmountInput value={form.amount} onChange={v => setF("amount", v)} /></Field>
+            {config.extraFields && config.extraFields(form, setF, w)}
+            <div style={{ display: "flex", gap: 8 }}><button style={{ ...S.btn(C.gold), flex: 1 }} onClick={handleSave}>{editId ? "수정 저장" : "추가"}</button><button style={S.btnGhost} onClick={() => { setShowForm(false); setEditId(null); setForm({ ...config.blank }); }}>취소</button></div>
+          </div>
+        </div>
+      )}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>이번 달 {config.title}</div>
+          <div style={{ fontSize: 26, fontWeight: 900, color: config.totalColor }}>{won(total)}</div>
+          {config.subtitle && <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{config.subtitle(monthData)}</div>}
+        </div>
+        <button style={S.btn()} onClick={() => { setForm({ ...config.blank }); setEditId(null); setShowForm(true); }}>+ {config.title} 추가</button>
+      </div>
+      {filter !== null && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+          {(config.filters || []).map(f => <button key={f} onClick={() => setFilter(f)} style={{ border: "none", borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", backgroundColor: filter === f ? C.gold : C.bg, color: filter === f ? C.goldDeep : C.muted, fontFamily: "inherit" }}>{f}</button>)}
+        </div>
+      )}
+      {config.extra && config.extra(monthData)}
+      {filtered.length === 0
+        ? <div style={{ ...S.card, textAlign: "center", color: C.muted, padding: 40 }}>내역이 없어요</div>
+        : <div style={{ ...S.card, padding: 0 }}>
+          {filtered.map((item, i) => (
+            <div key={item.id} onDoubleClick={() => startEdit(item)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: i < filtered.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{item.description}{item.isFixed && <span style={{ ...S.tag(C.purple, C.purpleLight), marginLeft: 6 }}>고정</span>}</div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 3, display: "flex", gap: 6, alignItems: "center" }}>
+                  <Badge text={`${EMO[item.category] || ""} ${item.category}`} color={config.badgeColor} bg={config.badgeBg} />
+                  <span>{item.date}</span>
+                </div>
+                {item.memo && <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{item.memo}</div>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ fontSize: 15, fontWeight: 900, color: config.amountColor }}>{config.prefix || ""}{won(item.amount)}</div>
+                <button onClick={() => handleDelete(item.id)} style={{ border: "none", background: "none", color: C.muted, cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      }
+    </div>
+  );
+}
 
-      <div style={{ ...S.card, marginBottom: 20, backgroundColor: C.primaryLight, border: `1.5px solid ${C.primary}` }}>
-        <div style={{ fontWeight: 700, marginBottom: 16 }}>근태 신청 등록</div>
-        <Grid cols={3} w={w}>
-          <FormField label="직원 선택 *">
-            <select style={S.select} value={form.employeeId} onChange={e => setF("employeeId", e.target.value)}>
-              <option value="">선택</option>
-              {employees.map(e => <option key={e.id} value={e.id}>{e.name} ({e.dept})</option>)}
-            </select>
-          </FormField>
-          <FormField label="유형">
-            <select style={S.select} value={form.type} onChange={e => setF("type", e.target.value)}>
-              {types.map(t => <option key={t}>{t}</option>)}
-            </select>
-          </FormField>
-          <FormField label="사유"><input style={S.input} value={form.reason} onChange={e => setF("reason", e.target.value)} placeholder="사유 입력" /></FormField>
-        </Grid>
-        <Grid cols={2} w={w}>
-          <FormField label="시작일"><input type="date" style={S.input} value={form.startDate} onChange={e => setF("startDate", e.target.value)} /></FormField>
-          <FormField label="종료일"><input type="date" style={S.input} value={form.endDate} onChange={e => setF("endDate", e.target.value)} /></FormField>
-        </Grid>
-        <button style={S.btn} onClick={add}>등록</button>
+// ─── 수입 ────────────────────────────────────────────────────────
+function IncomeManager({ income, setIncome, year, month, w }) {
+  return <TransactionManager data={income} setData={setIncome} sheetName="income" year={year} month={month} w={w} config={{ title: "수입", cats: INCOME_CATS, blank: { category: "급여", description: "", amount: "", date: todayStr() }, placeholder: "예: 12월 월급", totalColor: C.green, badgeColor: C.green, badgeBg: C.greenLight, amountColor: C.green, prefix: "+" }} />;
+}
+
+// ─── 지출 ────────────────────────────────────────────────────────
+function ExpenseManager({ expense, setExpense, year, month, w }) {
+  return (
+    <TransactionManager data={expense} setData={setExpense} sheetName="expense" year={year} month={month} w={w}
+      config={{
+        title: "지출", cats: EXPENSE_CATS,
+        blank: { category: "식비", description: "", amount: "", date: todayStr(), isFixed: false, memo: "" },
+        placeholder: "예: 마트 장보기", totalColor: C.red, badgeColor: C.gold, badgeBg: C.goldLight, amountColor: C.red, prefix: "-",
+        filters: ["전체", "고정", "변동"],
+        filterFn: (d, f) => f === "고정" ? d.isFixed : !d.isFixed,
+        subtitle: (data) => {
+          const fix = data.filter(d => d.isFixed).reduce((s, d) => s + Number(d.amount), 0);
+          const vr = data.filter(d => !d.isFixed).reduce((s, d) => s + Number(d.amount), 0);
+          return `고정 ${won(fix)} · 변동 ${won(vr)}`;
+        },
+        extraFields: (form, setF) => (
+          <>
+            <Field label="메모 (선택)"><input style={S.input} placeholder="메모" value={form.memo} onChange={e => setF("memo", e.target.value)} /></Field>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, cursor: "pointer" }}>
+              <input type="checkbox" checked={form.isFixed} onChange={e => setF("isFixed", e.target.checked)} style={{ width: 16, height: 16 }} />
+              <span style={{ fontSize: 13, fontWeight: 600 }}>고정비로 분류</span>
+            </label>
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+// ─── 저축 ────────────────────────────────────────────────────────
+function SavingsManager({ savings, setSavings, year, month, w }) {
+  const allByCat = {};
+  savings.forEach(s => { allByCat[s.category] = (allByCat[s.category] || 0) + Number(s.amount); });
+  const totalAll = Object.values(allByCat).reduce((s, v) => s + v, 0);
+  return (
+    <TransactionManager data={savings} setData={setSavings} sheetName="savings" year={year} month={month} w={w}
+      config={{
+        title: "저축", cats: SAVINGS_CATS,
+        blank: { category: "비상금", description: "", amount: "", date: todayStr(), goal: "" },
+        placeholder: "예: 비상금 이체", totalColor: C.blue, badgeColor: C.blue, badgeBg: C.blueLight, amountColor: C.blue,
+        extra: () => Object.keys(allByCat).length > 0 && (
+          <div style={{ ...S.card, background: C.goldLight, border: `1.5px solid ${C.goldBorder}`, marginBottom: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 12 }}>🏦 누적 저축 현황</div>
+            {Object.entries(allByCat).sort((a, b) => b[1] - a[1]).map(([cat, amt]) => (
+              <div key={cat} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{EMO[cat] || ""} {cat}</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: C.blue }}>{won(amt)}</span>
+              </div>
+            ))}
+            <div style={{ borderTop: `1px solid ${C.goldBorder}`, paddingTop: 10, marginTop: 6, display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontWeight: 800 }}>총 누적</span>
+              <span style={{ fontWeight: 900, fontSize: 18, color: C.gold }}>{won(totalAll)}</span>
+            </div>
+          </div>
+        ),
+        extraFields: (form, setF, ww) => (
+          <Field label="목표액 (선택)"><AmountInput value={form.goal} onChange={v => setF("goal", v)} /></Field>
+        ),
+      }}
+    />
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  자산 관리
+// ════════════════════════════════════════════════════════════════════
+function AssetsManager({ assets, setAssets, year, month, w }) {
+  const mob = isMob(w);
+  const ym = ymKey(year, month);
+  const mAssets = assets.filter(a => a.yearMonth === ym);
+  const totalA = mAssets.filter(a => a.atype === "자산").reduce((s, a) => s + Number(a.amount), 0);
+  const totalL = mAssets.filter(a => a.atype === "부채").reduce((s, a) => s + Number(a.amount), 0);
+  const netWorth = totalA - totalL;
+  const [goal, setGoal] = useState(() => lload("bgt-assetgoal", ""));
+  const goalN = Number(goal) || 0;
+  const goalPct = goalN > 0 ? Math.min(100, Math.round((netWorth / goalN) * 100)) : 0;
+  const [tab, setTab] = useState("자산"); // 자산|부채
+  const [form, setForm] = useState({ atype: "자산", category: "부동산", amount: "", memo: "" });
+  const [editId, setEditId] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  useEscapeClose(showForm, () => { setShowForm(false); setEditId(null); });
+  const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const cats = tab === "자산" ? ASSET_CATS : LIAB_CATS;
+  const displayed = mAssets.filter(a => a.atype === tab);
+
+  const handleSave = () => {
+    if (!form.amount) return;
+    const u = editId ? assets.map(a => a.id === editId ? { ...form, id: editId, yearMonth: ym } : a) : [...assets, { ...form, id: Date.now(), yearMonth: ym }];
+    setAssets(u); syncSheet("assets", u);
+    setForm({ atype: tab, category: cats[0], amount: "", memo: "" }); setEditId(null); setShowForm(false);
+  };
+  const handleDelete = (id) => { if (!window.confirm("삭제할까요?")) return; const u = assets.filter(a => a.id !== id); setAssets(u); syncSheet("assets", u); };
+  const startEdit = (item) => { setForm({ atype: item.atype, category: item.category, amount: item.amount, memo: item.memo || "" }); setEditId(item.id); setShowForm(true); setTab(item.atype); };
+
+  // 도넛 차트 (SVG)
+  const DonutChart = ({ value, total, color, label }) => {
+    if (total <= 0) return null;
+    const r = 38, cx = 50, cy = 50, c = 2 * Math.PI * r;
+    const p = Math.min(100, (value / total) * 100);
+    const dash = (p / 100) * c;
+    return (
+      <svg width="100" height="100" viewBox="0 0 100 100">
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={C.border} strokeWidth="12" />
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth="12" strokeDasharray={`${dash} ${c - dash}`} strokeDashoffset={c / 4} strokeLinecap="round" />
+        <text x={cx} y={cy - 6} textAnchor="middle" fontSize="10" fontWeight="800" fill={color}>{Math.round(p)}%</text>
+        <text x={cx} y={cy + 8} textAnchor="middle" fontSize="8" fill={C.muted}>{label}</text>
+      </svg>
+    );
+  };
+
+  return (
+    <div>
+      {showForm && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 400, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => { setShowForm(false); setEditId(null); }}>
+          <div style={{ backgroundColor: C.surface, borderRadius: 16, padding: 26, width: "100%", maxWidth: 440, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontWeight: 800, fontSize: 17 }}>{editId ? "수정" : (tab === "자산" ? "자산 추가" : "부채 추가")}</div>
+              <button onClick={() => { setShowForm(false); setEditId(null); }} style={{ border: "none", background: C.bg, color: C.muted, width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>×</button>
+            </div>
+            <Grid cols={2} w={w}>
+              <Field label="카테고리"><select style={S.select} value={form.category} onChange={e => setF("category", e.target.value)}>{cats.map(c => <option key={c}>{c}</option>)}</select></Field>
+              <Field label="금액(원)"><AmountInput value={form.amount} onChange={v => setF("amount", v)} /></Field>
+            </Grid>
+            <Field label="메모 (선택)"><input style={S.input} placeholder="메모" value={form.memo} onChange={e => setF("memo", e.target.value)} /></Field>
+            <div style={{ display: "flex", gap: 8 }}><button style={{ ...S.btn(C.gold), flex: 1 }} onClick={handleSave}>{editId ? "수정 저장" : "추가"}</button><button style={S.btnGhost} onClick={() => { setShowForm(false); setEditId(null); }}>취소</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* 순자산 Hero */}
+      <div style={{ ...S.card, background: C.gradient, border: "none" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(0,0,0,0.5)", letterSpacing: "0.1em", marginBottom: 4 }}>순 자산 · {year}년 {month}월</div>
+        <div style={{ fontSize: mob ? 28 : 36, fontWeight: 900, color: C.goldDeep, marginBottom: 6 }}>{won(netWorth)}</div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "rgba(0,0,0,0.55)" }}>자산 {won(totalA)}</span>
+          <span style={{ fontSize: 12, color: "rgba(0,0,0,0.55)" }}>부채 {won(totalL)}</span>
+        </div>
       </div>
 
+      {/* 목표 달성률 */}
+      <div style={S.card}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ fontWeight: 800, fontSize: 15 }}>🎯 자산 목표 달성률</div>
+          <Badge text={`${goalPct}%`} color={goalPct >= 100 ? C.green : C.gold} bg={goalPct >= 100 ? C.greenLight : C.goldLight} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <DonutChart value={netWorth} total={goalN} color={goalPct >= 100 ? C.green : C.gold} label="달성률" />
+          <div style={{ flex: 1 }}>
+            <div style={{ marginBottom: 8 }}>
+              <label style={S.label}>목표 순자산</label>
+              <AmountInput value={goal} onChange={v => { setGoal(v); lsave("bgt-assetgoal", v); }} placeholder="목표금액 입력" />
+            </div>
+            {goalN > 0 && <div style={{ fontSize: 12, color: C.muted }}>잔여 {won(Math.max(0, goalN - netWorth))}</div>}
+          </div>
+        </div>
+        {goalN > 0 && <div style={{ marginTop: 12 }}><ProgressBar value={netWorth} max={goalN} color={goalPct >= 100 ? C.green : C.gold} height={10} /></div>}
+      </div>
+
+      {/* 자산/부채 탭 */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 6 }}>
+          {["자산", "부채"].map(t => <button key={t} onClick={() => setTab(t)} style={{ border: "none", borderRadius: 20, padding: "6px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", backgroundColor: tab === t ? C.gold : C.bg, color: tab === t ? C.goldDeep : C.muted, fontFamily: "inherit" }}>{t}</button>)}
+        </div>
+        <button style={S.btn()} onClick={() => { setForm({ atype: tab, category: cats[0], amount: "", memo: "" }); setEditId(null); setShowForm(true); }}>+ 추가</button>
+      </div>
+      <div style={{ ...S.card, marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <span style={{ fontWeight: 800, color: tab === "자산" ? C.gold : C.red }}>{tab} 합계</span>
+          <span style={{ fontWeight: 900, fontSize: 18, color: tab === "자산" ? C.gold : C.red }}>{won(tab === "자산" ? totalA : totalL)}</span>
+        </div>
+      </div>
+      {displayed.length === 0
+        ? <div style={{ ...S.card, textAlign: "center", color: C.muted, padding: 40 }}>{tab} 내역이 없어요. + 추가를 눌러보세요</div>
+        : <div style={{ ...S.card, padding: 0 }}>
+          {displayed.map((item, i) => (
+            <div key={item.id} onDoubleClick={() => startEdit(item)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: i < displayed.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{EMO[item.category] || ""} {item.category}</div>
+                {item.memo && <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{item.memo}</div>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ fontSize: 15, fontWeight: 900, color: tab === "자산" ? C.gold : C.red }}>{won(item.amount)}</div>
+                <button onClick={() => handleDelete(item.id)} style={{ border: "none", background: "none", color: C.muted, cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      }
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  고정비 관리
+// ════════════════════════════════════════════════════════════════════
+function FixedCostManager({ fixedCosts, setFixedCosts, w }) {
+  const total = fixedCosts.filter(f => f.active).reduce((s, f) => s + Number(f.amount), 0);
+  const blank = { name: "", category: "주거/관리비", amount: "", memo: "", active: true };
+  const [form, setForm] = useState(blank);
+  const [editId, setEditId] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  useEscapeClose(showForm, () => { setShowForm(false); setEditId(null); setForm(blank); });
+  const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const handleSave = () => {
+    if (!form.name || !form.amount) return;
+    const u = editId ? fixedCosts.map(f => f.id === editId ? { ...form, id: editId } : f) : [...fixedCosts, { ...form, id: Date.now() }];
+    setFixedCosts(u); syncSheet("fixedcost", u);
+    setForm(blank); setEditId(null); setShowForm(false);
+  };
+  const handleDelete = (id) => { if (!window.confirm("삭제할까요?")) return; const u = fixedCosts.filter(f => f.id !== id); setFixedCosts(u); syncSheet("fixedcost", u); };
+  const toggleActive = (id) => { const u = fixedCosts.map(f => f.id === id ? { ...f, active: !f.active } : f); setFixedCosts(u); syncSheet("fixedcost", u); };
+  const startEdit = (item) => { setForm({ name: item.name, category: item.category, amount: item.amount, memo: item.memo || "", active: item.active }); setEditId(item.id); setShowForm(true); };
+
+  return (
+    <div>
+      {showForm && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 400, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => { setShowForm(false); setEditId(null); setForm(blank); }}>
+          <div style={{ backgroundColor: C.surface, borderRadius: 16, padding: 26, width: "100%", maxWidth: 440, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontWeight: 800, fontSize: 17 }}>{editId ? "고정비 수정" : "고정비 추가"}</div>
+              <button onClick={() => { setShowForm(false); setEditId(null); setForm(blank); }} style={{ border: "none", background: C.bg, color: C.muted, width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16 }}>×</button>
+            </div>
+            <Grid cols={2} w={w}>
+              <Field label="항목명"><input style={S.input} placeholder="예: 월세, 보험" value={form.name} onChange={e => setF("name", e.target.value)} autoFocus /></Field>
+              <Field label="카테고리"><select style={S.select} value={form.category} onChange={e => setF("category", e.target.value)}>{EXPENSE_CATS.map(c => <option key={c}>{c}</option>)}</select></Field>
+            </Grid>
+            <Field label="월 금액"><AmountInput value={form.amount} onChange={v => setF("amount", v)} /></Field>
+            <Field label="메모"><input style={S.input} placeholder="메모" value={form.memo} onChange={e => setF("memo", e.target.value)} /></Field>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, cursor: "pointer" }}>
+              <input type="checkbox" checked={form.active} onChange={e => setF("active", e.target.checked)} style={{ width: 16, height: 16 }} />
+              <span style={{ fontSize: 13, fontWeight: 600 }}>현재 활성</span>
+            </label>
+            <div style={{ display: "flex", gap: 8 }}><button style={{ ...S.btn(C.gold), flex: 1 }} onClick={handleSave}>{editId ? "수정 저장" : "추가"}</button><button style={S.btnGhost} onClick={() => { setShowForm(false); setEditId(null); setForm(blank); }}>취소</button></div>
+          </div>
+        </div>
+      )}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div><div style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>월 고정비 합계</div><div style={{ fontSize: 26, fontWeight: 900, color: C.purple }}>{won(total)}</div></div>
+        <button style={S.btn()} onClick={() => { setForm(blank); setEditId(null); setShowForm(true); }}>+ 고정비 추가</button>
+      </div>
+      {fixedCosts.length === 0
+        ? <div style={{ ...S.card, textAlign: "center", color: C.muted, padding: 40 }}>등록된 고정비가 없어요</div>
+        : <div style={{ ...S.card, padding: 0 }}>
+          {fixedCosts.map((item, i) => (
+            <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: i < fixedCosts.length - 1 ? `1px solid ${C.border}` : "none", opacity: item.active ? 1 : 0.45 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }} onDoubleClick={() => startEdit(item)}>
+                <input type="checkbox" checked={item.active} onChange={() => toggleActive(item.id)} style={{ width: 17, height: 17, cursor: "pointer" }} onClick={e => e.stopPropagation()} />
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>{item.name}</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}><Badge text={`${EMO[item.category] || ""} ${item.category}`} color={C.purple} bg={C.purpleLight} />{item.memo && <span style={{ marginLeft: 6 }}>{item.memo}</span>}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ fontSize: 16, fontWeight: 900, color: C.purple }}>{won(item.amount)}</div>
+                <button onClick={() => handleDelete(item.id)} style={{ border: "none", background: "none", color: C.muted, cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      }
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  예산 관리
+// ════════════════════════════════════════════════════════════════════
+function BudgetManager({ budget, setBudget, expense, year, month, w }) {
+  const ym = ymKey(year, month);
+  const mBudget = budget.filter(b => b.yearMonth === ym);
+  const mExpense = expense.filter(e => e.yearMonth === ym);
+  const expByCat = {};
+  mExpense.forEach(e => { expByCat[e.category] = (expByCat[e.category] || 0) + Number(e.amount); });
+  const [form, setForm] = useState({ category: EXPENSE_CATS[0], budgetAmount: "" });
+  const [editId, setEditId] = useState(null);
+  const handleSave = () => {
+    if (!form.budgetAmount) return;
+    const existing = mBudget.find(b => b.category === form.category && b.id !== editId);
+    let u;
+    if (existing && !editId) u = budget.map(b => b.id === existing.id ? { ...b, budgetAmount: form.budgetAmount } : b);
+    else if (editId) u = budget.map(b => b.id === editId ? { ...form, id: editId, yearMonth: ym } : b);
+    else u = [...budget, { ...form, id: Date.now(), yearMonth: ym }];
+    setBudget(u); syncSheet("budget", u);
+    setForm({ category: EXPENSE_CATS[0], budgetAmount: "" }); setEditId(null);
+  };
+  const handleDelete = (id) => { const u = budget.filter(b => b.id !== id); setBudget(u); syncSheet("budget", u); };
+  const copyFromPrev = () => {
+    const prevYm = month === 1 ? `${year - 1}-12` : ymKey(year, month - 1);
+    const prev = budget.filter(b => b.yearMonth === prevYm);
+    if (!prev.length) { alert("이전 달 예산 데이터가 없어요"); return; }
+    const u = [...budget.filter(b => b.yearMonth !== ym), ...prev.map(b => ({ ...b, id: Date.now() + Math.random(), yearMonth: ym }))];
+    setBudget(u); syncSheet("budget", u);
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ fontWeight: 800, fontSize: 16 }}>{year}년 {month}월 예산</div>
+        <button style={S.btnOutline} onClick={copyFromPrev}>전월 복사</button>
+      </div>
+      <div style={{ ...S.card, backgroundColor: C.goldLight, border: `1.5px solid ${C.goldBorder}`, marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>카테고리별 예산 설정</div>
+        <Grid cols={2} w={w}>
+          <Field label="카테고리"><select style={S.select} value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}>{EXPENSE_CATS.map(c => <option key={c}>{c}</option>)}</select></Field>
+          <Field label="예산 금액"><AmountInput value={form.budgetAmount} onChange={v => setForm(p => ({ ...p, budgetAmount: v }))} /></Field>
+        </Grid>
+        <button style={S.btn()} onClick={handleSave}>{editId ? "수정" : "예산 설정"}</button>
+      </div>
+      {mBudget.length === 0
+        ? <div style={{ ...S.card, textAlign: "center", color: C.muted, padding: 40 }}>예산을 설정해보세요</div>
+        : <div style={{ ...S.card, padding: 0 }}>
+          {mBudget.map((b, i) => {
+            const spent = expByCat[b.category] || 0;
+            const over = spent > Number(b.budgetAmount);
+            return (
+              <div key={b.id} style={{ padding: "14px 16px", borderBottom: i < mBudget.length - 1 ? `1px solid ${C.border}` : "none" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontWeight: 700, fontSize: 14 }}>{EMO[b.category] || ""} {b.category}</span>
+                    {over && <Badge text="초과" color={C.red} bg={C.redLight} />}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 12, color: over ? C.red : C.muted, fontWeight: 700 }}>{pct(spent, Number(b.budgetAmount))}%</span>
+                    <span style={{ fontSize: 13 }}>{won(spent)} <span style={{ color: C.muted }}>/ {won(b.budgetAmount)}</span></span>
+                    <button onClick={() => handleDelete(b.id)} style={{ border: "none", background: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>×</button>
+                  </div>
+                </div>
+                <ProgressBar value={spent} max={Number(b.budgetAmount)} color={over ? C.red : C.gold} />
+              </div>
+            );
+          })}
+        </div>
+      }
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  연간 리포트
+// ════════════════════════════════════════════════════════════════════
+function AnnualReport({ income, expense, savings, year, w }) {
+  const mob = isMob(w);
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const k = ymKey(year, i + 1);
+    const inc = income.filter(x => x.yearMonth === k).reduce((s, x) => s + Number(x.amount), 0);
+    const exp = expense.filter(x => x.yearMonth === k).reduce((s, x) => s + Number(x.amount), 0);
+    const sav = savings.filter(x => x.yearMonth === k).reduce((s, x) => s + Number(x.amount), 0);
+    const rate = inc > 0 ? Math.round((sav / inc) * 100) : 0;
+    return { month: i + 1, label: `${i + 1}월`, inc, exp, sav, rate, net: inc - exp - sav };
+  });
+  const totalInc  = months.reduce((s, m) => s + m.inc, 0);
+  const totalExp  = months.reduce((s, m) => s + m.exp, 0);
+  const totalSav  = months.reduce((s, m) => s + m.sav, 0);
+  const avgRate   = totalInc > 0 ? Math.round((totalSav / totalInc) * 100) : 0;
+  const bestSavMonth = [...months].sort((a, b) => b.rate - a.rate)[0];
+  const worstExpMonth = [...months].sort((a, b) => b.exp - a.exp)[0];
+
+  return (
+    <div>
+      {/* 연간 요약 */}
+      <div style={{ background: C.gradientDark, borderRadius: 18, padding: mob ? "22px 20px" : "28px", marginBottom: 16 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: "0.1em", marginBottom: 6 }}>{year}년 연간 결산</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {[
+            { label: "연간 수입", amount: totalInc, color: "#EDD98A" },
+            { label: "연간 지출", amount: totalExp, color: C.red },
+            { label: "연간 저축", amount: totalSav, color: "#93C5FD" },
+            { label: `저축률 ${avgRate}%`, amount: totalInc - totalExp - totalSav, color: "#86EFAC" },
+          ].map(c => (
+            <div key={c.label}>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", marginBottom: 3 }}>{c.label}</div>
+              <div style={{ fontSize: mob ? 14 : 17, fontWeight: 900, color: c.color }}>{won(c.amount)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 인사이트 카드 */}
+      <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 10, marginBottom: 16 }}>
+        <div style={{ backgroundColor: C.greenLight, borderRadius: 14, padding: "14px 16px" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 4 }}>💚 저축률 최고 월</div>
+          <div style={{ fontSize: 17, fontWeight: 900, color: C.green }}>{bestSavMonth.label}</div>
+          <div style={{ fontSize: 12, color: C.green }}>저축률 {bestSavMonth.rate}% · {won(bestSavMonth.sav)}</div>
+        </div>
+        <div style={{ backgroundColor: C.redLight, borderRadius: 14, padding: "14px 16px" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.red, marginBottom: 4 }}>❗ 지출 최고 월</div>
+          <div style={{ fontSize: 17, fontWeight: 900, color: C.red }}>{worstExpMonth.label}</div>
+          <div style={{ fontSize: 12, color: C.red }}>지출 {won(worstExpMonth.exp)}</div>
+        </div>
+      </div>
+
+      {/* 월별 수입 차트 */}
+      <div style={S.card}>
+        <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>💰 월별 수입</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>연 총 {won(totalInc)}</div>
+        <BarChart data={months.map(m => ({ label: m.label, value: m.inc }))} h={100} color={C.gold} />
+      </div>
+
+      {/* 월별 지출 차트 */}
+      <div style={S.card}>
+        <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>💸 월별 지출</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>연 총 {won(totalExp)}</div>
+        <BarChart data={months.map(m => ({ label: m.label, value: m.exp }))} h={100} color={C.red} />
+      </div>
+
+      {/* 월별 저축률 차트 */}
+      <div style={S.card}>
+        <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>🏦 월별 저축률</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>연 평균 저축률 {avgRate}%</div>
+        <BarChart data={months.map(m => ({ label: m.label, value: m.rate }))} h={100} color={C.blue} />
+      </div>
+
+      {/* 월별 상세 테이블 */}
       <div style={{ ...S.card, padding: 0, overflow: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: isMob ? 400 : 560 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 480 }}>
           <thead>
             <tr style={{ backgroundColor: C.bg }}>
-              {["직원","유형","시작일","종료일","사유",""].map(h => (
-                <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, color: C.muted, borderBottom: `1px solid ${C.border}`, fontSize: 12 }}>{h}</th>
+              {["월", "수입", "지출", "저축", "저축률", "순잔액"].map(h => (
+                <th key={h} style={{ padding: "10px 12px", textAlign: h === "월" ? "center" : "right", fontWeight: 800, color: C.muted, fontSize: 11, borderBottom: `2px solid ${C.border}` }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {attendances.length === 0 ? <tr><td colSpan={6} style={{ padding: 40, textAlign: "center", color: C.muted }}>등록된 근태 내역이 없습니다</td></tr>
-            : [...attendances].reverse().map(a => {
-              const tc = typeColor(a.type);
-              return (
-                <tr key={a.id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                  <td style={{ padding: "11px 12px", fontWeight: 600 }}>{a.employeeName}</td>
-                  <td style={{ padding: "11px 12px" }}><Badge text={a.type} color={tc.color} bg={tc.bg} /></td>
-                  <td style={{ padding: "11px 12px", color: C.muted, whiteSpace: "nowrap" }}>{fmt(a.startDate)}</td>
-                  <td style={{ padding: "11px 12px", color: C.muted, whiteSpace: "nowrap" }}>{fmt(a.endDate)}</td>
-                  <td style={{ padding: "11px 12px", color: C.muted }}>{a.reason || "-"}</td>
-                  <td style={{ padding: "11px 12px" }}><button style={S.btnSm()} onClick={() => remove(a.id)}>삭제</button></td>
-                </tr>
-              );
-            })}
+            {months.map((m, i) => (
+              <tr key={m.month} style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: i % 2 === 1 ? "rgba(201,168,76,0.03)" : "transparent" }}>
+                <td style={{ padding: "10px 12px", textAlign: "center", fontWeight: 700 }}>{m.label}</td>
+                <td style={{ padding: "10px 12px", textAlign: "right", color: C.green }}>{m.inc > 0 ? won(m.inc) : "-"}</td>
+                <td style={{ padding: "10px 12px", textAlign: "right", color: C.red }}>{m.exp > 0 ? won(m.exp) : "-"}</td>
+                <td style={{ padding: "10px 12px", textAlign: "right", color: C.blue }}>{m.sav > 0 ? won(m.sav) : "-"}</td>
+                <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700, color: C.gold }}>{m.rate > 0 ? `${m.rate}%` : "-"}</td>
+                <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700, color: m.net >= 0 ? C.gold : C.red }}>{won(m.net)}</td>
+              </tr>
+            ))}
           </tbody>
+          <tfoot>
+            <tr style={{ backgroundColor: C.goldLight, fontWeight: 900 }}>
+              <td style={{ padding: "10px 12px", textAlign: "center" }}>합계</td>
+              <td style={{ padding: "10px 12px", textAlign: "right", color: C.green }}>{won(totalInc)}</td>
+              <td style={{ padding: "10px 12px", textAlign: "right", color: C.red }}>{won(totalExp)}</td>
+              <td style={{ padding: "10px 12px", textAlign: "right", color: C.blue }}>{won(totalSav)}</td>
+              <td style={{ padding: "10px 12px", textAlign: "right", color: C.gold }}>{avgRate}%</td>
+              <td style={{ padding: "10px 12px", textAlign: "right", color: C.gold }}>{won(totalInc - totalExp - totalSav)}</td>
+            </tr>
+          </tfoot>
         </table>
-      </div>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════
-//  온보딩
-// ════════════════════════════════════════════════════════════════════
-const DEFAULT_ITEMS = [
-  { text: "입사 안내 메일 발송", category: "HR" },
-  { text: "노트북 신청", category: "총무" },
-  { text: "이메일 계정 생성", category: "IT" },
-  { text: "사내 시스템 계정 발급", category: "IT" },
-  { text: "4대보험 취득 신고", category: "HR" },
-  { text: "급여 계좌 등록", category: "HR" },
-  { text: "근로계약서 서명", category: "HR" },
-  { text: "조직도 및 사규 안내", category: "HR" },
-  { text: "팀 소개 미팅 진행", category: "팀장" },
-  { text: "사원증 발급", category: "총무" },
-  { text: "명함 제작 신청", category: "총무" },
-  { text: "주차 등록", category: "총무" },
-  { text: "OJT 일정 수립", category: "팀장" },
-  { text: "수습 평가 일정 안내", category: "HR" },
-];
-
-function OnboardingManager({ w }) {
-  const isMob = mob(w);
-  const [onboardings, setOnboardings] = useState(() => load("hr-onboardings", []));
-  const [selected, setSelected] = useState(null);
-  const [adding, setAdding] = useState(false);
-  const [newName, setNewName] = useState(""); const [joinDate, setJoinDate] = useState(todayStr());
-
-  const addOnboarding = () => {
-    if (!newName) return;
-    const items = DEFAULT_ITEMS.map((item, i) => ({ id: i, ...item, done: false }));
-    const u = [...onboardings, { id: Date.now(), name: newName, joinDate, items }];
-    setOnboardings(u); save("hr-onboardings", u);
-    setNewName(""); setAdding(false);
-  };
-  const toggleItem = (oid, iid) => {
-    const u = onboardings.map(o => o.id === oid ? { ...o, items: o.items.map(i => i.id === iid ? { ...i, done: !i.done, doneDate: !i.done ? todayStr() : null } : i) } : o);
-    setOnboardings(u); save("hr-onboardings", u);
-  };
-  const removeO = (id) => { const u = onboardings.filter(o => o.id !== id); setOnboardings(u); save("hr-onboardings", u); if (selected === id) setSelected(null); };
-  const current = onboardings.find(o => o.id === selected);
-  const catColor = (c) => c === "HR" ? { color: C.primary, bg: C.primaryLight } : c === "IT" ? { color: C.green, bg: C.greenLight } : c === "총무" ? { color: C.orange, bg: C.orangeLight } : { color: C.purple, bg: C.purpleLight };
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-        <h2 style={{ margin: 0, fontSize: isMob ? 20 : 24, fontWeight: 800 }}>온보딩 체크리스트</h2>
-        <button style={S.btn} onClick={() => setAdding(!adding)}>+ 입사자 추가</button>
-      </div>
-
-      {adding && (
-        <div style={{ ...S.card, marginBottom: 20, backgroundColor: C.primaryLight, border: `1.5px solid ${C.primary}` }}>
-          <Grid cols={2} w={w}>
-            <FormField label="입사자 이름 *"><input style={S.input} value={newName} onChange={e => setNewName(e.target.value)} placeholder="홍길동" /></FormField>
-            <FormField label="입사일"><input type="date" style={S.input} value={joinDate} onChange={e => setJoinDate(e.target.value)} /></FormField>
-          </Grid>
-          <div style={{ display: "flex", gap: 8 }}><button style={S.btn} onClick={addOnboarding}>추가</button><button style={S.btnGhost} onClick={() => setAdding(false)}>취소</button></div>
-        </div>
-      )}
-
-      <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "260px 1fr", gap: 16 }}>
-        <div style={S.card}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: C.muted, marginBottom: 12 }}>입사자 목록</div>
-          {onboardings.length === 0 ? <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: "20px 0" }}>입사자를 추가해주세요</div>
-          : onboardings.map(o => {
-            const done = o.items.filter(i => i.done).length;
-            const pct = Math.round(done / o.items.length * 100);
-            return (
-              <div key={o.id} onClick={() => setSelected(o.id)} style={{ padding: 12, borderRadius: 8, marginBottom: 8, cursor: "pointer", backgroundColor: selected === o.id ? C.primaryLight : C.bg, border: `1.5px solid ${selected === o.id ? C.primary : C.border}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>{o.name}</span>
-                  <button onClick={e => { e.stopPropagation(); removeO(o.id); }} style={S.btnSm()}>삭제</button>
-                </div>
-                <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>{fmt(o.joinDate)} 입사</div>
-                <div style={{ backgroundColor: C.border, borderRadius: 4, height: 6, overflow: "hidden" }}>
-                  <div style={{ width: `${pct}%`, height: "100%", backgroundColor: pct === 100 ? C.green : C.primary, borderRadius: 4, transition: "width 0.3s" }} />
-                </div>
-                <div style={{ fontSize: 11, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: C.muted }}>{done}/{o.items.length} 완료</span>
-                  <span style={{ color: pct === 100 ? C.green : C.primary, fontWeight: 700 }}>{pct}%</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div style={S.card}>
-          {!current ? (
-            <div style={{ color: C.muted, fontSize: 14, textAlign: "center", padding: "60px 0" }}>입사자를 선택해주세요</div>
-          ) : (
-            <>
-              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2 }}>{current.name}</div>
-              <div style={{ color: C.muted, fontSize: 13, marginBottom: 16 }}>{fmt(current.joinDate)} 입사 · {current.items.filter(i => i.done).length}/{current.items.length} 완료</div>
-              {current.items.map(item => {
-                const cc = catColor(item.category);
-                return (
-                  <div key={item.id} onClick={() => toggleItem(current.id, item.id)}
-                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, marginBottom: 6, cursor: "pointer", backgroundColor: item.done ? C.greenLight : C.bg }}>
-                    <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${item.done ? C.green : C.border}`, backgroundColor: item.done ? C.green : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      {item.done && <span style={{ color: "#fff", fontSize: 12 }}>✓</span>}
-                    </div>
-                    <Badge text={item.category} color={cc.color} bg={cc.bg} />
-                    <span style={{ fontSize: 13, textDecoration: item.done ? "line-through" : "none", color: item.done ? C.muted : C.ink, flex: 1 }}>{item.text}</span>
-                    {item.done && item.doneDate && <span style={{ fontSize: 11, color: C.muted }}>{fmt(item.doneDate)}</span>}
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════
-//  일정 관리 — 신규
-// ════════════════════════════════════════════════════════════════════
-function EventManager({ events, setEvents, w }) {
-  const isMob = mob(w);
-  const [form, setForm] = useState({ title: "", date: todayStr(), category: "HR", desc: "" });
-  const setF = (f, v) => setForm(p => ({ ...p, [f]: v }));
-  const categories = ["HR","채용","급여","행사","총무","교육","기타"];
-  const catColor = (c) => c === "HR" ? { color: C.primary, bg: C.primaryLight } : c === "채용" ? { color: C.green, bg: C.greenLight } : c === "급여" ? { color: C.yellow, bg: C.yellowLight } : c === "행사" ? { color: C.purple, bg: C.purpleLight } : { color: C.orange, bg: C.orangeLight };
-
-  const add = () => {
-    if (!form.title) return;
-    const u = [...events, { ...form, id: Date.now() }];
-    setEvents(u); save("hr-events", u);
-    setForm({ title: "", date: todayStr(), category: "HR", desc: "" });
-  };
-  const remove = (id) => { const u = events.filter(e => e.id !== id); setEvents(u); save("hr-events", u); };
-
-  // 🤖 자동화: 이번달 / 다음달 자동 분류
-  const thisMonth = new Date().toISOString().slice(0, 7);
-  const nextMonth = new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().slice(0, 7);
-  const grouped = {
-    "이번달": events.filter(e => e.date.startsWith(thisMonth)).sort((a, b) => a.date.localeCompare(b.date)),
-    "다음달": events.filter(e => e.date.startsWith(nextMonth)).sort((a, b) => a.date.localeCompare(b.date)),
-    "이후": events.filter(e => e.date > nextMonth + "-31").sort((a, b) => a.date.localeCompare(b.date)),
-  };
-
-  return (
-    <div>
-      <h2 style={{ margin: "0 0 20px", fontSize: isMob ? 20 : 24, fontWeight: 800 }}>주요 일정</h2>
-
-      <div style={{ ...S.card, marginBottom: 20, backgroundColor: C.primaryLight, border: `1.5px solid ${C.primary}` }}>
-        <Grid cols={4} mobCols={1} w={w}>
-          <FormField label="일정 제목 *"><input style={S.input} value={form.title} onChange={e => setF("title", e.target.value)} placeholder="일정 입력" /></FormField>
-          <FormField label="날짜"><input type="date" style={S.input} value={form.date} onChange={e => setF("date", e.target.value)} /></FormField>
-          <FormField label="카테고리">
-            <select style={S.select} value={form.category} onChange={e => setF("category", e.target.value)}>
-              {categories.map(c => <option key={c}>{c}</option>)}
-            </select>
-          </FormField>
-          <FormField label="상세내용"><input style={S.input} value={form.desc} onChange={e => setF("desc", e.target.value)} placeholder="상세내용" /></FormField>
-        </Grid>
-        <button style={S.btn} onClick={add}>+ 일정 추가</button>
-      </div>
-
-      {Object.entries(grouped).map(([period, evts]) => evts.length === 0 ? null : (
-        <div key={period} style={{ marginBottom: 24 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: C.muted, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-            <span>{period === "이번달" ? "📅" : period === "다음달" ? "🗓" : "📆"}</span>
-            <span>{period}</span>
-            <Badge text={`${evts.length}건`} color={C.primary} bg={C.primaryLight} />
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {evts.map(e => {
-              const cc = catColor(e.category);
-              const dl = daysLeft(e.date);
-              return (
-                <div key={e.id} style={{ ...S.card, display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", flexWrap: isMob ? "wrap" : "nowrap" }}>
-                  <div style={{ backgroundColor: cc.bg, borderRadius: 8, padding: "6px 10px", textAlign: "center", flexShrink: 0 }}>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: cc.color }}>{e.date.slice(8)}</div>
-                    <div style={{ fontSize: 9, color: cc.color }}>{e.date.slice(5, 7)}월</div>
-                  </div>
-                  <Badge text={e.category} color={cc.color} bg={cc.bg} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{e.title}</div>
-                    {e.desc && <div style={{ fontSize: 12, color: C.muted }}>{e.desc}</div>}
-                  </div>
-                  {dl !== null && dl >= 0 && <span style={{ fontSize: 12, fontWeight: 700, color: dl <= 3 ? C.red : C.muted, whiteSpace: "nowrap" }}>D-{dl}</span>}
-                  <button style={S.btnSm()} onClick={() => remove(e.id)}>삭제</button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════
-//  Todo
-// ════════════════════════════════════════════════════════════════════
-function TodoManager({ w }) {
-  const isMob = mob(w);
-  const [todos, setTodos] = useState(() => load("hr-todos", []));
-  const [form, setForm] = useState({ text: "", category: "채용", dueDate: "", priority: "보통" });
-  const [filter, setFilter] = useState("전체");
-  const setF = (f, v) => setForm(p => ({ ...p, [f]: v }));
-  const categories = ["채용","온보딩","근태","급여","총무","행사","교육","기타"];
-  const pc = (p) => p === "높음" ? { color: C.red, bg: C.redLight } : p === "낮음" ? { color: C.muted, bg: C.bg } : { color: C.yellow, bg: C.yellowLight };
-
-  const add = () => {
-    if (!form.text) return;
-    const u = [...todos, { ...form, id: Date.now(), done: false, createdAt: todayStr() }];
-    setTodos(u); save("hr-todos", u);
-    setForm({ text: "", category: "채용", dueDate: "", priority: "보통" });
-  };
-  const toggle = (id) => { const u = todos.map(t => t.id === id ? { ...t, done: !t.done, doneDate: !t.done ? todayStr() : null } : t); setTodos(u); save("hr-todos", u); };
-  const remove = (id) => { const u = todos.filter(t => t.id !== id); setTodos(u); save("hr-todos", u); };
-  const filtered = todos.filter(t => filter === "전체" ? true : (filter === "완료" ? t.done : (filter === "미완료" ? !t.done : (!t.done && t.category === filter))));
-
-  return (
-    <div>
-      <h2 style={{ margin: "0 0 16px", fontSize: isMob ? 20 : 24, fontWeight: 800 }}>업무 Todo <span style={{ fontSize: 14, color: C.muted, fontWeight: 400 }}>미완료 {todos.filter(t => !t.done).length}건</span></h2>
-
-      <div style={{ ...S.card, marginBottom: 20 }}>
-        <Grid cols={4} mobCols={1} w={w}>
-          <FormField label="업무 내용 *">
-            <input style={S.input} value={form.text} onChange={e => setF("text", e.target.value)} placeholder="할 일 입력 (Enter)" onKeyDown={e => e.key === "Enter" && add()} />
-          </FormField>
-          <FormField label="카테고리">
-            <select style={{ ...S.select, width: "100%" }} value={form.category} onChange={e => setF("category", e.target.value)}>
-              {categories.map(c => <option key={c}>{c}</option>)}
-            </select>
-          </FormField>
-          <FormField label="우선순위">
-            <select style={{ ...S.select, width: "100%" }} value={form.priority} onChange={e => setF("priority", e.target.value)}>
-              {["높음","보통","낮음"].map(p => <option key={p}>{p}</option>)}
-            </select>
-          </FormField>
-          <FormField label="마감일">
-            <input type="date" style={{ ...S.input, width: "100%" }} value={form.dueDate} onChange={e => setF("dueDate", e.target.value)} />
-          </FormField>
-        </Grid>
-        <button style={S.btn} onClick={add}>+ 추가</button>
-      </div>
-
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-        {["전체","미완료","완료",...categories].map(f => (
-          <button key={f} onClick={() => setFilter(f)} style={{ border: "none", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", backgroundColor: filter === f ? C.primary : C.bg, color: filter === f ? "#fff" : C.muted, fontFamily: "inherit" }}>{f}</button>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {filtered.length === 0 ? <div style={{ ...S.card, textAlign: "center", color: C.muted, padding: 40 }}>할 일이 없습니다 🎉</div>
-        : filtered.map(t => {
-          const pcolor = pc(t.priority);
-          const dl = daysLeft(t.dueDate);
-          return (
-            <div key={t.id} style={{ ...S.card, display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", opacity: t.done ? 0.6 : 1, flexWrap: isMob ? "wrap" : "nowrap" }}>
-              <div onClick={() => toggle(t.id)} style={{ width: 22, height: 22, borderRadius: 4, border: `2px solid ${t.done ? C.green : C.border}`, backgroundColor: t.done ? C.green : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-                {t.done && <span style={{ color: "#fff", fontSize: 13 }}>✓</span>}
-              </div>
-              <Badge text={t.category} color={C.primary} bg={C.primaryLight} />
-              <Badge text={t.priority} color={pcolor.color} bg={pcolor.bg} />
-              <span style={{ flex: 1, fontSize: 14, textDecoration: t.done ? "line-through" : "none", color: t.done ? C.muted : C.ink, minWidth: 80 }}>{t.text}</span>
-              {t.dueDate && <span style={{ fontSize: 12, fontWeight: 600, color: dl !== null && dl <= 1 && !t.done ? C.red : C.muted, whiteSpace: "nowrap" }}>{fmt(t.dueDate)}{dl !== null && !t.done && dl <= 3 ? ` D-${dl}` : ""}</span>}
-              <button style={S.btnSm()} onClick={() => remove(t.id)}>삭제</button>
-            </div>
-          );
-        })}
       </div>
     </div>
   );
@@ -883,94 +838,165 @@ function TodoManager({ w }) {
 //  앱 루트
 // ════════════════════════════════════════════════════════════════════
 export default function App() {
-  const w = useWindowWidth();
-  const isMob = mob(w);
-  const [page, setPage] = useState("dashboard");
+  const w = useWidth();
+  const mob = isMob(w);
+  const thisYear = new Date().getFullYear();
+  const thisMonth = new Date().getMonth() + 1;
+  const [year, setYear]   = useState(() => lload("bgt-year", thisYear));
+  const [month, setMonth] = useState(() => lload("bgt-month", thisMonth));
+  const [page, setPage]   = useState(() => lload("bgt-page", "dashboard"));
   const [menuOpen, setMenuOpen] = useState(false);
-  const [employees, setEmployees] = useState(() => load("hr-employees", []));
-  const [candidates, setCandidates] = useState(() => load("hr-candidates", []));
-  const [attendances, setAttendances] = useState(() => load("hr-attendances", []));
-  const [events, setEvents] = useState(() => load("hr-events", []));
-  const todos = load("hr-todos", []);
+  const [syncStatus, setSyncStatus] = useState("local");
+  const [income,     setIncome]     = useState(() => lload("budget-income",    []));
+  const [expense,    setExpense]    = useState(() => lload("budget-expense",   []));
+  const [savings,    setSavings]    = useState(() => lload("budget-savings",   []));
+  const [budget,     setBudget]     = useState(() => lload("budget-budget",    []));
+  const [fixedCosts, setFixedCosts] = useState(() => lload("budget-fixedcost", []));
+  const [assets,     setAssets]     = useState(() => lload("budget-assets",    []));
+
+  useEffect(() => { lsave("bgt-year", year); lsave("bgt-month", month); }, [year, month]);
+  useEffect(() => { lsave("bgt-page", page); }, [page]);
+
+  useEffect(() => {
+    if (!SHEET_URL) return;
+    setSyncStatus("loading");
+    fetch(SHEET_URL + "?t=" + Date.now())
+      .then(r => r.json())
+      .then(data => {
+        if (data.result === "success" && data.data) {
+          const d = data.data;
+          if (d.income)    { setIncome(d.income);        lsave("budget-income",    d.income); }
+          if (d.expense)   { setExpense(d.expense);      lsave("budget-expense",   d.expense); }
+          if (d.savings)   { setSavings(d.savings);      lsave("budget-savings",   d.savings); }
+          if (d.budget)    { setBudget(d.budget);        lsave("budget-budget",    d.budget); }
+          if (d.fixedcost) { setFixedCosts(d.fixedcost); lsave("budget-fixedcost", d.fixedcost); }
+          if (d.assets)    { setAssets(d.assets);        lsave("budget-assets",    d.assets); }
+        }
+        setSyncStatus("ok");
+      })
+      .catch(() => setSyncStatus("error"));
+  }, []);
+
+  // 당겨서 새로고침
+  const [pullY, setPullY] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const touchStartY = useRef(0);
+  const PULL_THRESHOLD = 80;
+  const handleTouchStart = (e) => { if (window.scrollY === 0) touchStartY.current = e.touches[0].clientY; };
+  const handleTouchMove = (e) => {
+    if (!touchStartY.current) return;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    if (dy > 0 && window.scrollY === 0) { setIsPulling(true); setPullY(Math.min(dy * 0.4, PULL_THRESHOLD + 20)); }
+  };
+  const handleTouchEnd = () => { if (pullY >= PULL_THRESHOLD) window.location.reload(); setIsPulling(false); setPullY(0); touchStartY.current = 0; };
+  useEscapeClose(menuOpen, () => setMenuOpen(false));
 
   const nav = [
-    { id: "dashboard", label: "대시보드", icon: "🏠" },
-    { id: "employees", label: "직원 관리", icon: "👥" },
-    { id: "recruiting", label: "채용 관리", icon: "📋" },
-    { id: "attendance", label: "근태 관리", icon: "📅" },
-    { id: "onboarding", label: "온보딩", icon: "✅" },
-    { id: "events", label: "주요 일정", icon: "🗓" },
-    { id: "todo", label: "업무 Todo", icon: "📌" },
+    { id: "dashboard",  label: "대시보드", icon: "📊" },
+    { id: "income",     label: "수입",     icon: "💰" },
+    { id: "expense",    label: "지출",     icon: "💸" },
+    { id: "savings",    label: "저축",     icon: "🏦" },
+    { id: "assets",     label: "자산",     icon: "🏛" },
+    { id: "fixedcost",  label: "고정비",   icon: "📌" },
+    { id: "budget",     label: "예산",     icon: "📋" },
+    { id: "annual",     label: "연간리포트", icon: "📈" },
   ];
-
   const goTo = (id) => { setPage(id); setMenuOpen(false); };
+  const changeMonth = (y, m) => { setYear(y); setMonth(m); };
 
+  const props = { year, month, w };
   const renderPage = () => {
-    switch(page) {
-      case "dashboard": return <Dashboard employees={employees} todos={todos} candidates={candidates} attendances={attendances} events={events} w={w} />;
-      case "employees": return <EmployeeManager employees={employees} setEmployees={setEmployees} w={w} />;
-      case "recruiting": return <RecruitManager candidates={candidates} setCandidates={setCandidates} w={w} />;
-      case "attendance": return <AttendanceManager employees={employees} attendances={attendances} setAttendances={setAttendances} w={w} />;
-      case "onboarding": return <OnboardingManager w={w} />;
-      case "events": return <EventManager events={events} setEvents={setEvents} w={w} />;
-      case "todo": return <TodoManager w={w} />;
+    switch (page) {
+      case "dashboard":  return <Dashboard income={income} expense={expense} savings={savings} budget={budget} fixedCosts={fixedCosts} assets={assets} {...props} />;
+      case "income":     return <IncomeManager income={income} setIncome={setIncome} {...props} />;
+      case "expense":    return <ExpenseManager expense={expense} setExpense={setExpense} {...props} />;
+      case "savings":    return <SavingsManager savings={savings} setSavings={setSavings} {...props} />;
+      case "assets":     return <AssetsManager assets={assets} setAssets={setAssets} {...props} />;
+      case "fixedcost":  return <FixedCostManager fixedCosts={fixedCosts} setFixedCosts={setFixedCosts} {...props} />;
+      case "budget":     return <BudgetManager budget={budget} setBudget={setBudget} expense={expense} {...props} />;
+      case "annual":     return <AnnualReport income={income} expense={expense} savings={savings} year={year} w={w} />;
       default: return null;
     }
   };
 
-  return (
-    <div style={{ minHeight: "100vh", backgroundColor: C.bg, fontFamily: "'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif", color: C.ink }}>
-      {isMob ? (
-        <>
-          <div style={{ position: "sticky", top: 0, zIndex: 200, backgroundColor: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56 }}>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>🏢 HR 업무 관리</div>
-            <button onClick={() => setMenuOpen(!menuOpen)} style={{ border: "none", backgroundColor: "transparent", fontSize: 22, cursor: "pointer" }}>☰</button>
-          </div>
-          {menuOpen && (
-            <div style={{ position: "fixed", inset: 0, zIndex: 300, backgroundColor: "rgba(0,0,0,0.4)" }} onClick={() => setMenuOpen(false)}>
-              <div style={{ position: "absolute", top: 0, left: 0, width: 260, height: "100%", backgroundColor: C.surface, padding: "24px 12px", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
-                <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 20, padding: "0 8px" }}>🏢 HR 업무 관리</div>
-                {nav.map(n => (
-                  <button key={n.id} onClick={() => goTo(n.id)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "12px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 15, fontWeight: page === n.id ? 700 : 400, backgroundColor: page === n.id ? C.primaryLight : "transparent", color: page === n.id ? C.primary : C.ink, marginBottom: 4, fontFamily: "inherit" }}>
-                    <span>{n.icon}</span><span>{n.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          <div style={{ padding: 16, paddingBottom: 80 }}>{renderPage()}</div>
-          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, backgroundColor: C.surface, borderTop: `1px solid ${C.border}`, display: "flex", zIndex: 100 }}>
-            {nav.slice(0, 5).map(n => (
-              <button key={n.id} onClick={() => goTo(n.id)} style={{ flex: 1, border: "none", backgroundColor: "transparent", padding: "8px 2px 6px", cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                <span style={{ fontSize: 18 }}>{n.icon}</span>
-                <span style={{ fontSize: 9, fontWeight: page === n.id ? 700 : 400, color: page === n.id ? C.primary : C.muted }}>{n.label}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <div style={{ display: "flex" }}>
-          <div style={{ width: tab(w) ? 180 : 220, minHeight: "100vh", backgroundColor: C.surface, borderRight: `1px solid ${C.border}`, flexShrink: 0, position: "sticky", top: 0, height: "100vh", overflowY: "auto", display: "flex", flexDirection: "column" }}>
-            <div style={{ padding: "24px 20px 18px", borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>HR SYSTEM</div>
-              <div style={{ fontSize: tab(w) ? 14 : 16, fontWeight: 800 }}>인사 업무 관리</div>
-            </div>
-            <div style={{ padding: 12, flex: 1 }}>
-              {nav.map(n => (
-                <button key={n.id} onClick={() => setPage(n.id)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "10px 12px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: tab(w) ? 13 : 14, fontWeight: page === n.id ? 700 : 400, backgroundColor: page === n.id ? C.primaryLight : "transparent", color: page === n.id ? C.primary : C.ink, marginBottom: 2, fontFamily: "inherit" }}>
-                  <span>{n.icon}</span><span>{n.label}</span>
-                </button>
-              ))}
-            </div>
-            <div style={{ padding: "14px 20px", borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.muted }}>
-              직원 {employees.length}명 · 지원자 {candidates.length}명
-            </div>
-          </div>
-          <div style={{ flex: 1, padding: tab(w) ? "24px" : "32px 36px", overflowY: "auto", maxHeight: "100vh" }}>
-            {renderPage()}
+  const GoldTitle = ({ style }) => (
+    <div style={{ fontWeight: 900, background: C.gradient, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text", ...style }}>💛 우리 가계부</div>
+  );
+
+
+  // ─── 모바일 ─────────────────────────────────────────────────────
+  if (mob) return (
+    <div onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ minHeight: "100vh", backgroundColor: C.bg }}>
+      {isPulling && (
+        <div style={{ position: "fixed", top: `calc(env(safe-area-inset-top,0px) + 54px)`, left: 0, right: 0, zIndex: 500, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
+          <div style={{ marginTop: 8, width: 36, height: 36, borderRadius: "50%", backgroundColor: C.surface, border: `2px solid ${C.goldBorder}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: 16 }}>{pullY >= PULL_THRESHOLD ? "✅" : "↓"}</span>
           </div>
         </div>
       )}
+      <div style={{ transform: isPulling ? `translateY(${pullY}px)` : "none", transition: isPulling ? "none" : "transform 0.25s ease" }}>
+        <div style={{ position: "sticky", top: 0, zIndex: 200, backgroundColor: C.surface, borderBottom: `1px solid ${C.border}`, paddingTop: "env(safe-area-inset-top,0px)", paddingLeft: 16, paddingRight: 16, minHeight: 54, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <GoldTitle style={{ fontSize: 17 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <SyncBadge status={syncStatus} />
+            <button onClick={() => setMenuOpen(true)} style={{ border: "none", backgroundColor: "transparent", fontSize: 22, cursor: "pointer", color: C.gold }}>☰</button>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", backgroundColor: C.goldLight, borderBottom: `1px solid ${C.goldBorder}` }}>
+          <MonthNav year={year} month={month} onChange={changeMonth} />
+          <SyncBadge status={syncStatus} />
+        </div>
+        {menuOpen && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 300, backgroundColor: "rgba(0,0,0,0.5)" }} onClick={() => setMenuOpen(false)}>
+            <div style={{ position: "absolute", top: 0, left: 0, width: 270, height: "100%", backgroundColor: C.surface, padding: "20px 12px", paddingTop: "max(20px,calc(env(safe-area-inset-top,0px) + 16px))", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+              <GoldTitle style={{ fontSize: 18, marginBottom: 20, padding: "0 8px" }} />
+              {nav.map(n => (
+                <button key={n.id} onClick={() => goTo(n.id)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", padding: "12px 12px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 15, fontWeight: page === n.id ? 700 : 400, backgroundColor: page === n.id ? C.goldLight : "transparent", color: page === n.id ? C.goldDark : C.ink, marginBottom: 2, fontFamily: "inherit" }}>
+                  <span style={{ fontSize: 18 }}>{n.icon}</span><span>{n.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div style={{ padding: "16px 14px", paddingBottom: `calc(80px + env(safe-area-inset-bottom,0px))`, paddingLeft: `max(14px,env(safe-area-inset-left,0px))`, paddingRight: `max(14px,env(safe-area-inset-right,0px))` }}>
+          {renderPage()}
+        </div>
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, backgroundColor: C.surface, borderTop: `1px solid ${C.border}`, zIndex: 100, paddingBottom: "env(safe-area-inset-bottom,0px)", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <div style={{ display: "flex", minWidth: "max-content" }}>
+            {nav.map(n => (
+              <button key={n.id} onClick={() => goTo(n.id)} style={{ minWidth: 64, border: "none", backgroundColor: "transparent", padding: "8px 10px 6px", cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                <span style={{ fontSize: 18 }}>{n.icon}</span>
+                <span style={{ fontSize: 9, fontWeight: page === n.id ? 700 : 400, color: page === n.id ? C.gold : C.muted, whiteSpace: "nowrap" }}>{n.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", minHeight: "100vh", backgroundColor: C.bg }}>
+      <div style={{ width: isTab(w) ? 190 : 230, minHeight: "100vh", backgroundColor: C.surface, borderRight: `1px solid ${C.border}`, flexShrink: 0, position: "sticky", top: 0, height: "100vh", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+        <div style={{ padding: "28px 20px 20px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <GoldTitle style={{ fontSize: isTab(w) ? 17 : 20, marginBottom: 8, lineHeight: 1.3 }} />
+          <SyncBadge status={syncStatus} />
+        </div>
+        <div style={{ padding: 12, flex: 1 }}>
+          {nav.map(n => (
+            <button key={n.id} onClick={() => setPage(n.id)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "10px 12px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: isTab(w) ? 13 : 14, fontWeight: page === n.id ? 700 : 400, backgroundColor: page === n.id ? C.goldLight : "transparent", color: page === n.id ? C.goldDark : C.ink, marginBottom: 2, fontFamily: "inherit" }}>
+              <span>{n.icon}</span><span>{n.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ position: "sticky", top: 0, zIndex: 100, backgroundColor: C.surface, borderBottom: `1px solid ${C.border}`, padding: "14px 28px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <MonthNav year={year} month={month} onChange={changeMonth} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>{nav.find(n => n.id === page)?.label}</span>
+        </div>
+        <div style={{ padding: "24px 28px", maxWidth: 860 }}>{renderPage()}</div>
+      </div>
     </div>
   );
 }
