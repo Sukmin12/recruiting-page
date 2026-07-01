@@ -301,7 +301,6 @@ function Dashboard({ income, expense, savings, budget, fixedCosts, assets, year,
 // ════════════════════════════════════════════════════════════════════
 function TransactionManager({ data, setData, sheetName, year, month, w, config }) {
   const ym = ymKey(year, month);
-  const mob = isMob(w);
   const monthData = data.filter(d => d.yearMonth === ym).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   const total = monthData.reduce((s, d) => s + Number(d.amount), 0);
   const [filter, setFilter] = config.filters ? useState("전체") : [null, null]; // eslint-disable-line react-hooks/rules-of-hooks
