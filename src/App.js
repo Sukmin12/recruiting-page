@@ -11,22 +11,24 @@ import {
 /* ============================================================
    우리집 가계부 — pay-cycle aware household finance app.
    Design signature: a "pay-cycle timeline" that visualizes the
-   gap between payday and next month's bills — dark fintech bento
-   layout, violet/mint/coral accents, tabular numerals throughout.
+   gap between payday and next month's bills — bright airy bento
+   layout on soft lavender-white, violet/mint/coral accents,
+   tabular numerals throughout.
    ============================================================ */
 
-const BG = "#0B0E14";
-const SURFACE = "#141924";
-const SURFACE_2 = "#1B2130";
-const BORDER = "rgba(255,255,255,0.08)";
-const TEXT = "#F3F5F9";
-const TEXT_DIM = "#8A91A6";
-const TEXT_FAINT = "#5A6178";
-const VIOLET = "#8B7CF6";
-const VIOLET_SOFT = "rgba(139,124,246,0.16)";
-const MINT = "#3DDC97";
-const CORAL = "#FB7A87";
-const GOLD = "#F5C26B";
+const BG = "#F5F4FB";
+const SURFACE = "#FFFFFF";
+const SURFACE_2 = "#F1EFFB";
+const BORDER = "rgba(27,36,48,0.09)";
+const TEXT = "#1C2130";
+const TEXT_DIM = "#6B7280";
+const TEXT_FAINT = "#9BA1B0";
+const VIOLET = "#6E5FE0";
+const VIOLET_SOFT = "rgba(110,95,224,0.12)";
+const MINT = "#1FA971";
+const CORAL = "#E0555D";
+const GOLD = "#C2871F";
+const ON_ACCENT = "#FFFFFF";
 
 const displayFont = "'Pretendard','Inter',-apple-system,sans-serif";
 const numFont = "'IBM Plex Mono',ui-monospace,monospace";
@@ -59,11 +61,15 @@ const DEFAULT_CATEGORIES = [
   { main: "기타", type: "expense", subs: ["세금", "회비", "서비스"] },
 ];
 
-const DEFAULT_CARDS = [
-  { id: uid(), name: "생활비카드1", billingDay: 14 },
-  { id: uid(), name: "생활비카드2", billingDay: 25 },
+const DEFAULT_ACCOUNTS = [
+  { id: uid(), name: "생활비통장", bank: "국민은행" },
+  { id: uid(), name: "급여통장", bank: "카카오뱅크" },
 ];
-const DEFAULT_OTHER_PAYMENTS = ["현금", "계좌이체", "체크카드"];
+const DEFAULT_CARDS = [
+  { id: uid(), name: "생활비카드1", cardType: "credit", billingDay: 14, accountId: null },
+  { id: uid(), name: "체크카드", cardType: "debit", billingDay: null, accountId: null },
+];
+const DEFAULT_OTHER_PAYMENTS = ["현금", "상품권"];
 
 const DEFAULT_PROFILES = [
   { id: uid(), name: "남편", payday: 10, amount: 0 },
@@ -82,12 +88,12 @@ const NAV = [
 
 /* ---------- card billing-cycle helper ---------- */
 function cardCycle(card, transactions, ref = new Date()) {
-  const day = Math.min(card.billingDay, 28);
+  const day = Math.min(card.billingDay || 1, 28);
   let last = new Date(ref.getFullYear(), ref.getMonth(), day);
   if (last > ref) last = new Date(ref.getFullYear(), ref.getMonth() - 1, day);
   const next = new Date(last.getFullYear(), last.getMonth() + 1, day);
   const spend = transactions
-    .filter((t) => t.payment === card.name && t.type === "expense")
+    .filter((t) => t.cardId === card.id && t.type === "expense")
     .filter((t) => {
       const d = new Date(t.date);
       return d > last && d <= ref;
@@ -95,10 +101,31 @@ function cardCycle(card, transactions, ref = new Date()) {
     .reduce((a, t) => a + Number(t.amount), 0);
   return { lastBilling: last, nextBilling: next, spend };
 }
+function debitMonthSpend(card, transactions, ref = new Date()) {
+  const key = `${ref.getFullYear()}-${pad2(ref.getMonth() + 1)}`;
+  return transactions
+    .filter((t) => t.cardId === card.id && t.type === "expense" && ymOf(t.date) === key)
+    .reduce((a, t) => a + Number(t.amount), 0);
+}
+function paymentLabel(t, cards, accounts) {
+  if (t.cardId) {
+    const c = cards.find((x) => x.id === t.cardId);
+    if (c) {
+      const acc = accounts.find((a) => a.id === c.accountId);
+      return `${c.name}${acc ? " · " + acc.name : ""}`;
+    }
+  }
+  if (t.accountId) {
+    const a = accounts.find((x) => x.id === t.accountId);
+    if (a) return a.name;
+  }
+  return t.paymentNote || "현금";
+}
 
 export default function HouseholdLedger() {
   const [page, setPage] = useState("dashboard");
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [accounts, setAccounts] = useState(DEFAULT_ACCOUNTS);
   const [cards, setCards] = useState(DEFAULT_CARDS);
   const [otherPayments, setOtherPayments] = useState(DEFAULT_OTHER_PAYMENTS);
   const [profiles, setProfiles] = useState(DEFAULT_PROFILES);
@@ -107,7 +134,6 @@ export default function HouseholdLedger() {
   const [transactions, setTransactions] = useState([]);
   const [ym, setYm] = useState(ymOf(todayStr()));
 
-  const paymentOptions = [...cards.map((c) => c.name), ...otherPayments];
   const mainType = (main) => categories.find((c) => c.main === main)?.type || "expense";
 
   const addTx = (entry) => setTransactions((t) => [...t, { id: uid(), isFixed: false, ...entry }]);
@@ -119,7 +145,7 @@ export default function HouseholdLedger() {
     setYm(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`);
   };
 
-  const shared = { categories, setCategories, cards, setCards, otherPayments, setOtherPayments, paymentOptions, mainType, transactions, addTx, removeTx, ym, setYm, shiftMonth, profiles, setProfiles, goals, setGoals, assets, setAssets };
+  const shared = { categories, setCategories, accounts, setAccounts, cards, setCards, otherPayments, setOtherPayments, mainType, transactions, addTx, removeTx, ym, setYm, shiftMonth, profiles, setProfiles, goals, setGoals, assets, setAssets };
 
   return (
     <div style={{ background: BG, color: TEXT, minHeight: "100vh", fontFamily: displayFont }}>
@@ -151,7 +177,7 @@ export default function HouseholdLedger() {
         <aside className="sidebar">
           <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 30, padding: "0 6px" }}>
             <div style={{ width: 34, height: 34, borderRadius: 10, background: `linear-gradient(135deg, ${VIOLET}, ${MINT})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Wallet size={17} color={BG} />
+              <Wallet size={17} color={ON_ACCENT} />
             </div>
             <span style={{ fontWeight: 700, fontSize: 16 }}>우리집 가계부</span>
           </div>
@@ -218,7 +244,7 @@ function PageTitle({ children, right }) {
   );
 }
 function Card({ children, style }) {
-  return <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 18, ...style }}>{children}</div>;
+  return <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 18, boxShadow: "0 1px 2px rgba(27,36,48,0.04), 0 8px 24px rgba(27,36,48,0.05)", ...style }}>{children}</div>;
 }
 function Stat({ label, value, suffix, tone, big }) {
   const color = tone === "mint" ? MINT : tone === "coral" ? CORAL : tone === "gold" ? GOLD : TEXT;
@@ -246,7 +272,7 @@ function MonthNav({ ym, shiftMonth }) {
 }
 const iconBtn = { background: "none", border: "none", color: TEXT_DIM, cursor: "pointer", display: "flex" };
 const inputStyle = { border: `1px solid ${BORDER}`, background: SURFACE_2, color: TEXT, borderRadius: 8, padding: "8px 10px", fontSize: 13.5, width: "100%" };
-const primaryBtn = { display: "flex", alignItems: "center", gap: 5, background: `linear-gradient(135deg, ${VIOLET}, #6E5FE0)`, color: "#fff", border: "none", borderRadius: 8, padding: "9px 14px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" };
+const primaryBtn = { display: "flex", alignItems: "center", gap: 5, background: `linear-gradient(135deg, ${VIOLET}, #8B7CF6)`, color: "#fff", border: "none", borderRadius: 8, padding: "9px 14px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" };
 
 /* ================= 대시보드 ================= */
 function Dashboard({ profiles, cards, transactions }) {
@@ -258,7 +284,8 @@ function Dashboard({ profiles, cards, transactions }) {
     .filter((t) => t.type === "expense" && t.isFixed && ymOf(t.date) === currentYM)
     .reduce((a, t) => a + Number(t.amount), 0);
 
-  const cardUpcoming = cards.map((c) => ({ ...c, ...cardCycle(c, transactions, today) }));
+  const creditCards = cards.filter((c) => c.cardType !== "debit");
+  const cardUpcoming = creditCards.map((c) => ({ ...c, ...cardCycle(c, transactions, today) }));
   const cardTotal = cardUpcoming.reduce((a, c) => a + c.spend, 0);
   const expectedIncome = profiles.reduce((a, p) => a + Number(p.amount || 0), 0);
   const available = expectedIncome - fixedThisMonth - cardTotal;
@@ -292,9 +319,9 @@ function Dashboard({ profiles, cards, transactions }) {
         <Stat label="가용 여유자금" value={won(available)} suffix="원" tone={available >= 0 ? "mint" : "coral"} big />
       </div>
 
-      <SectionLabel>카드별 청구 예정</SectionLabel>
+      <SectionLabel>신용카드 청구 예정</SectionLabel>
       <div className="bento">
-        {cardUpcoming.length === 0 && <Card><span style={{ color: TEXT_DIM, fontSize: 13 }}>등록된 카드가 없어요. 카드관리에서 추가해보세요.</span></Card>}
+        {cardUpcoming.length === 0 && <Card><span style={{ color: TEXT_DIM, fontSize: 13 }}>등록된 신용카드가 없어요. 카드관리에서 추가해보세요.</span></Card>}
         {cardUpcoming.map((c) => (
           <Card key={c.id}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -339,7 +366,7 @@ function PayCycleTimeline({ profiles, day }) {
         );
       })}
       <div style={{ position: "absolute", top: 18, left: `${Math.min(day / 30, 1) * width}%`, transform: "translateX(-50%)", textAlign: "center" }}>
-        <div style={{ width: 14, height: 14, borderRadius: "50%", background: TEXT, border: `3px solid ${BG}`, margin: "0 auto" }} />
+        <div style={{ width: 14, height: 14, borderRadius: "50%", background: TEXT, border: `3px solid ${SURFACE}`, margin: "0 auto" }} />
         <div style={{ fontSize: 10.5, color: TEXT, marginTop: 4, fontWeight: 700 }}>오늘 {day}일</div>
       </div>
     </div>
@@ -423,9 +450,13 @@ function IncomePage({ categories, transactions, addTx, removeTx, ym, shiftMonth,
 }
 
 /* ================= 지출 ================= */
-function ExpensePage({ categories, paymentOptions, transactions, addTx, removeTx, ym, shiftMonth }) {
+function ExpensePage({ categories, cards, accounts, otherPayments, transactions, addTx, removeTx, ym, shiftMonth }) {
   const expenseCats = categories.filter((c) => c.type !== "income");
-  const [form, setForm] = useState({ date: todayStr(), main: expenseCats[0].main, sub: expenseCats[0].subs[0] || "", desc: "", amount: "", payment: paymentOptions[0], isFixed: false });
+  const defaultPayType = cards.length ? "card" : accounts.length ? "account" : "cash";
+  const [form, setForm] = useState({
+    date: todayStr(), main: expenseCats[0].main, sub: expenseCats[0].subs[0] || "", desc: "", amount: "",
+    isFixed: false, payType: defaultPayType, cardId: cards[0]?.id || "", accountId: accounts[0]?.id || "", paymentNote: otherPayments[0] || "현금",
+  });
   const [filter, setFilter] = useState("all");
 
   const list = transactions.filter((t) => t.type !== "income" && ymOf(t.date) === ym)
@@ -435,7 +466,17 @@ function ExpensePage({ categories, paymentOptions, transactions, addTx, removeTx
   const submit = () => {
     if (!form.date || !form.amount) return;
     const type = categories.find((c) => c.main === form.main)?.type || "expense";
-    addTx({ ...form, type, amount: Number(form.amount) });
+    const entry = { date: form.date, main: form.main, sub: form.sub, desc: form.desc, isFixed: form.isFixed, type, amount: Number(form.amount) };
+    if (form.payType === "card") {
+      const card = cards.find((c) => c.id === form.cardId);
+      entry.cardId = form.cardId;
+      entry.accountId = card?.accountId || null;
+    } else if (form.payType === "account") {
+      entry.accountId = form.accountId;
+    } else {
+      entry.paymentNote = form.paymentNote;
+    }
+    addTx(entry);
     setForm((f) => ({ ...f, desc: "", amount: "" }));
   };
 
@@ -460,13 +501,41 @@ function ExpensePage({ categories, paymentOptions, transactions, addTx, removeTx
                 {subsFor(form.main).map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 8, marginBottom: 8 }}>
               <input placeholder="사용내역" value={form.desc} onChange={(e) => setForm({ ...form, desc: e.target.value })} style={inputStyle} />
               <input placeholder="금액" type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={inputStyle} />
-              <select value={form.payment} onChange={(e) => setForm({ ...form, payment: e.target.value })} style={inputStyle}>
-                {paymentOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
             </div>
+
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              {[["card", "카드"], ["account", "계좌이체"], ["cash", "현금/기타"]].map(([k, l]) => (
+                <button key={k} onClick={() => setForm({ ...form, payType: k })} style={{ ...inputStyle, width: "auto", cursor: "pointer", background: form.payType === k ? VIOLET_SOFT : SURFACE_2, color: form.payType === k ? VIOLET : TEXT_DIM, fontWeight: 600, border: `1px solid ${form.payType === k ? VIOLET : BORDER}` }}>{l}</button>
+              ))}
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              {form.payType === "card" && (
+                cards.length ? (
+                  <select value={form.cardId} onChange={(e) => setForm({ ...form, cardId: e.target.value })} style={inputStyle}>
+                    {cards.map((c) => {
+                      const acc = accounts.find((a) => a.id === c.accountId);
+                      return <option key={c.id} value={c.id}>{c.name} ({c.cardType === "credit" ? "신용" : "체크"}{acc ? " · " + acc.name : ""})</option>;
+                    })}
+                  </select>
+                ) : <div style={{ fontSize: 12.5, color: TEXT_FAINT }}>등록된 카드가 없어요. 카드관리에서 추가해주세요.</div>
+              )}
+              {form.payType === "account" && (
+                accounts.length ? (
+                  <select value={form.accountId} onChange={(e) => setForm({ ...form, accountId: e.target.value })} style={inputStyle}>
+                    {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.bank})</option>)}
+                  </select>
+                ) : <div style={{ fontSize: 12.5, color: TEXT_FAINT }}>등록된 계좌가 없어요. 카드관리에서 추가해주세요.</div>
+              )}
+              {form.payType === "cash" && (
+                <select value={form.paymentNote} onChange={(e) => setForm({ ...form, paymentNote: e.target.value })} style={inputStyle}>
+                  {otherPayments.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              )}
+            </div>
+
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: TEXT_DIM, cursor: "pointer" }}>
                 <input type="checkbox" checked={form.isFixed} onChange={(e) => setForm({ ...form, isFixed: e.target.checked })} />
@@ -502,7 +571,7 @@ function ExpensePage({ categories, paymentOptions, transactions, addTx, removeTx
                     <td>{t.main} {t.isFixed && <span style={{ fontSize: 10, color: GOLD, marginLeft: 3 }}>●고정</span>}</td>
                     <td style={{ color: TEXT_DIM }}>{t.desc || t.sub}</td>
                     <td className="tnum" style={{ textAlign: "right", color: t.type === "saving" ? GOLD : CORAL }}>{won(t.amount)}</td>
-                    <td style={{ color: TEXT_DIM, fontSize: 12 }}>{t.payment}</td>
+                    <td style={{ color: TEXT_DIM, fontSize: 12 }}>{paymentLabel(t, cards, accounts)}</td>
                     <td style={{ textAlign: "center" }}><button onClick={() => removeTx(t.id)} style={iconBtn}><Trash2 size={14} /></button></td>
                   </tr>
                 ))}
@@ -531,33 +600,60 @@ function ExpensePage({ categories, paymentOptions, transactions, addTx, removeTx
 }
 
 /* ================= 카드관리 ================= */
-function CardPage({ cards, setCards, transactions }) {
-  const [form, setForm] = useState({ name: "", billingDay: 15 });
+function CardPage({ cards, setCards, accounts, setAccounts, transactions }) {
+  const [cardForm, setCardForm] = useState({ name: "", cardType: "credit", billingDay: 15, accountId: accounts[0]?.id || "" });
+  const [accForm, setAccForm] = useState({ name: "", bank: "" });
+
   const addCard = () => {
-    if (!form.name.trim()) return;
-    setCards((c) => [...c, { id: uid(), name: form.name.trim(), billingDay: Number(form.billingDay) }]);
-    setForm({ name: "", billingDay: 15 });
+    if (!cardForm.name.trim()) return;
+    setCards((c) => [...c, {
+      id: uid(), name: cardForm.name.trim(), cardType: cardForm.cardType,
+      billingDay: cardForm.cardType === "credit" ? Number(cardForm.billingDay) : null,
+      accountId: cardForm.accountId || null,
+    }]);
+    setCardForm({ name: "", cardType: "credit", billingDay: 15, accountId: accounts[0]?.id || "" });
   };
   const removeCard = (id) => setCards((c) => c.filter((x) => x.id !== id));
 
+  const addAccount = () => {
+    if (!accForm.name.trim()) return;
+    setAccounts((a) => [...a, { id: uid(), name: accForm.name.trim(), bank: accForm.bank.trim() }]);
+    setAccForm({ name: "", bank: "" });
+  };
+  const removeAccount = (id) => setAccounts((a) => a.filter((x) => x.id !== id));
+
   return (
     <div>
-      <PageTitle>카드관리</PageTitle>
-      <div className="bento" style={{ marginBottom: 22 }}>
+      <PageTitle>카드 · 계좌 관리</PageTitle>
+
+      <SectionLabel>등록된 카드</SectionLabel>
+      <div className="bento" style={{ marginBottom: 18 }}>
+        {cards.length === 0 && <Card><span style={{ color: TEXT_DIM, fontSize: 13 }}>등록된 카드가 없어요.</span></Card>}
         {cards.map((c) => {
-          const { nextBilling, lastBilling, spend } = cardCycle(c, transactions);
-          const cycleTx = transactions.filter((t) => t.payment === c.name && t.type === "expense" && new Date(t.date) > lastBilling).sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 5);
+          const isCredit = c.cardType !== "debit";
+          const acc = accounts.find((a) => a.id === c.accountId);
+          const { nextBilling, lastBilling, spend } = isCredit ? cardCycle(c, transactions) : { spend: debitMonthSpend(c, transactions) };
+          const cycleTx = transactions
+            .filter((t) => t.cardId === c.id && t.type === "expense" && (!isCredit || new Date(t.date) > lastBilling))
+            .sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 5);
           return (
             <Card key={c.id}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{c.name}</div>
-                  <div style={{ fontSize: 11.5, color: TEXT_DIM }}>매월 {c.billingDay}일 결제</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontWeight: 700, fontSize: 15 }}>{c.name}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: isCredit ? VIOLET : MINT, background: isCredit ? VIOLET_SOFT : "rgba(61,220,151,0.15)", borderRadius: 6, padding: "1px 6px" }}>{isCredit ? "신용" : "체크"}</span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: TEXT_DIM, marginTop: 2 }}>
+                    {isCredit ? `매월 ${c.billingDay}일 결제` : "즉시 출금"} · {acc ? acc.name : "연결 계좌 없음"}
+                  </div>
                 </div>
                 <button onClick={() => removeCard(c.id)} style={iconBtn}><Trash2 size={14} /></button>
               </div>
               <div className="tnum" style={{ fontSize: 22, fontWeight: 700, color: CORAL, marginBottom: 4 }}>{won(spend)}원</div>
-              <div style={{ fontSize: 11.5, color: TEXT_FAINT, marginBottom: 10 }}>{nextBilling.getMonth() + 1}월 {nextBilling.getDate()}일 청구 예정</div>
+              <div style={{ fontSize: 11.5, color: TEXT_FAINT, marginBottom: 10 }}>
+                {isCredit ? `${nextBilling.getMonth() + 1}월 ${nextBilling.getDate()}일 청구 예정` : "이번 달 사용액"}
+              </div>
               {cycleTx.length > 0 && (
                 <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 8 }}>
                   {cycleTx.map((t) => (
@@ -574,11 +670,46 @@ function CardPage({ cards, setCards, transactions }) {
       </div>
 
       <SectionLabel>카드 추가</SectionLabel>
-      <Card>
-        <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr auto", gap: 8 }}>
-          <input placeholder="카드 이름" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
-          <input type="number" min={1} max={28} placeholder="결제일" value={form.billingDay} onChange={(e) => setForm({ ...form, billingDay: e.target.value })} style={inputStyle} />
+      <Card style={{ marginBottom: 26 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr 1.3fr auto", gap: 8, alignItems: "center" }}>
+          <input placeholder="카드 이름" value={cardForm.name} onChange={(e) => setCardForm({ ...cardForm, name: e.target.value })} style={inputStyle} />
+          <select value={cardForm.cardType} onChange={(e) => setCardForm({ ...cardForm, cardType: e.target.value })} style={inputStyle}>
+            <option value="credit">신용카드</option>
+            <option value="debit">체크카드</option>
+          </select>
+          {cardForm.cardType === "credit" ? (
+            <input type="number" min={1} max={28} placeholder="결제일" value={cardForm.billingDay} onChange={(e) => setCardForm({ ...cardForm, billingDay: e.target.value })} style={inputStyle} />
+          ) : <div />}
+          <select value={cardForm.accountId} onChange={(e) => setCardForm({ ...cardForm, accountId: e.target.value })} style={inputStyle}>
+            <option value="">연결 계좌 선택</option>
+            {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.bank})</option>)}
+          </select>
           <button onClick={addCard} style={primaryBtn}><Plus size={14} /> 추가</button>
+        </div>
+      </Card>
+
+      <SectionLabel>등록된 계좌</SectionLabel>
+      <div className="bento" style={{ marginBottom: 18 }}>
+        {accounts.length === 0 && <Card><span style={{ color: TEXT_DIM, fontSize: 13 }}>등록된 계좌가 없어요.</span></Card>}
+        {accounts.map((a) => (
+          <Card key={a.id}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{a.name}</div>
+                <div style={{ fontSize: 11.5, color: TEXT_DIM }}>{a.bank}</div>
+              </div>
+              <button onClick={() => removeAccount(a.id)} style={iconBtn}><Trash2 size={14} /></button>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      <SectionLabel>계좌 추가</SectionLabel>
+      <Card>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8 }}>
+          <input placeholder="계좌 이름 (예: 생활비통장)" value={accForm.name} onChange={(e) => setAccForm({ ...accForm, name: e.target.value })} style={inputStyle} />
+          <input placeholder="은행" value={accForm.bank} onChange={(e) => setAccForm({ ...accForm, bank: e.target.value })} style={inputStyle} />
+          <button onClick={addAccount} style={primaryBtn}><Plus size={14} /> 추가</button>
         </div>
       </Card>
     </div>
