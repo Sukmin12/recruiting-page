@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Plus, Trash2, Wallet, PiggyBank, Home, ListTree, ChevronRight } from "lucide-react";
+import { Plus, Trash2, PiggyBank, ListTree, ChevronRight } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line, Legend } from "recharts";
 
 /* ============================================================
