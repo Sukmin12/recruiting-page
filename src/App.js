@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   LayoutDashboard, ArrowDownCircle, ArrowUpCircle, CreditCard, PiggyBank,
   Landmark, Settings, Plus, Trash2, ChevronLeft, ChevronRight, Wallet,
@@ -134,6 +134,15 @@ export default function HouseholdLedger() {
   const [transactions, setTransactions] = useState([]);
   const [ym, setYm] = useState(ymOf(todayStr()));
 
+  const [sheetUrl, setSheetUrl] = useState(() => {
+    try { return localStorage.getItem("hh_sheet_url") || ""; } catch { return ""; }
+  });
+  const [syncStatus, setSyncStatus] = useState("idle"); // idle | loading | saving | saved | error
+  const [syncError, setSyncError] = useState("");
+  const [lastSync, setLastSync] = useState(null);
+  const hydratedRef = useRef(false);
+  const saveTimerRef = useRef(null);
+
   const mainType = (main) => categories.find((c) => c.main === main)?.type || "expense";
 
   const addTx = (entry) => setTransactions((t) => [...t, { id: uid(), isFixed: false, ...entry }]);
@@ -145,7 +154,75 @@ export default function HouseholdLedger() {
     setYm(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`);
   };
 
-  const shared = { categories, setCategories, accounts, setAccounts, cards, setCards, otherPayments, setOtherPayments, mainType, transactions, addTx, removeTx, ym, setYm, shiftMonth, profiles, setProfiles, goals, setGoals, assets, setAssets };
+  const buildSnapshot = () => ({ transactions, cards, accounts, otherPayments, profiles, goals, assets, categories });
+  const applySnapshot = (data) => {
+    if (Array.isArray(data.transactions)) setTransactions(data.transactions);
+    if (Array.isArray(data.cards)) setCards(data.cards);
+    if (Array.isArray(data.accounts)) setAccounts(data.accounts);
+    if (Array.isArray(data.otherPayments)) setOtherPayments(data.otherPayments);
+    if (Array.isArray(data.profiles)) setProfiles(data.profiles);
+    if (Array.isArray(data.goals)) setGoals(data.goals);
+    if (Array.isArray(data.assets)) setAssets(data.assets);
+    if (Array.isArray(data.categories)) setCategories(data.categories);
+  };
+
+  const saveToSheet = async (url, snapshot) => {
+    if (!url) return;
+    setSyncStatus("saving"); setSyncError("");
+    try {
+      const res = await fetch(url, { method: "POST", body: JSON.stringify(snapshot || buildSnapshot()) });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error || "저장 실패");
+      setSyncStatus("saved"); setLastSync(new Date());
+    } catch (err) {
+      setSyncStatus("error"); setSyncError(String(err.message || err));
+    }
+  };
+
+  const loadFromSheet = async (url) => {
+    if (!url) return;
+    setSyncStatus("loading"); setSyncError("");
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (Array.isArray(data.categories) && data.categories.length > 0) {
+        applySnapshot(data);
+      } else {
+        await saveToSheet(url, buildSnapshot());
+      }
+      setSyncStatus("saved"); setLastSync(new Date());
+    } catch (err) {
+      setSyncStatus("error"); setSyncError(String(err.message || err));
+    } finally {
+      hydratedRef.current = true;
+    }
+  };
+
+  useEffect(() => {
+    try { localStorage.setItem("hh_sheet_url", sheetUrl); } catch { /* ignore */ }
+  }, [sheetUrl]);
+
+  useEffect(() => {
+    if (sheetUrl) loadFromSheet(sheetUrl);
+    else hydratedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!sheetUrl || !hydratedRef.current) return;
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => saveToSheet(sheetUrl), 1500);
+    return () => clearTimeout(saveTimerRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions, cards, accounts, otherPayments, profiles, goals, assets, categories]);
+
+  const shared = {
+    categories, setCategories, accounts, setAccounts, cards, setCards, otherPayments, setOtherPayments,
+    mainType, transactions, addTx, removeTx, ym, setYm, shiftMonth, profiles, setProfiles, goals, setGoals, assets, setAssets,
+    sheetUrl, setSheetUrl, syncStatus, syncError, lastSync,
+    onSaveNow: () => saveToSheet(sheetUrl),
+    onLoadNow: () => loadFromSheet(sheetUrl),
+  };
 
   return (
     <div style={{ background: BG, color: TEXT, minHeight: "100vh", fontFamily: displayFont }}>
@@ -184,6 +261,8 @@ export default function HouseholdLedger() {
           {NAV.map((n) => (
             <NavItem key={n.key} item={n} active={page === n.key} onClick={() => setPage(n.key)} />
           ))}
+          <div style={{ flex: 1 }} />
+          <SyncBadge sheetUrl={sheetUrl} syncStatus={syncStatus} lastSync={lastSync} />
         </aside>
 
         <main className="main">
@@ -204,6 +283,20 @@ export default function HouseholdLedger() {
           <NavItem key={n.key} item={n} active={page === n.key} onClick={() => setPage(n.key)} bottom />
         ))}
       </nav>
+    </div>
+  );
+}
+
+function SyncBadge({ sheetUrl, syncStatus, lastSync }) {
+  if (!sheetUrl) {
+    return <div style={{ fontSize: 11, color: TEXT_FAINT, padding: "8px 10px" }}>시트 연동 안 됨 · 설정에서 연결</div>;
+  }
+  const dot = syncStatus === "error" ? CORAL : syncStatus === "saving" || syncStatus === "loading" ? GOLD : MINT;
+  const label = syncStatus === "error" ? "동기화 오류" : syncStatus === "saving" ? "저장 중…" : syncStatus === "loading" ? "불러오는 중…" : lastSync ? `저장됨 · ${lastSync.getHours()}:${pad2(lastSync.getMinutes())}` : "연결됨";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 11, color: TEXT_DIM, padding: "8px 10px" }}>
+      <span style={{ width: 7, height: 7, borderRadius: "50%", background: dot, flexShrink: 0 }} />
+      {label}
     </div>
   );
 }
@@ -855,11 +948,12 @@ function AssetPage({ assets, setAssets }) {
 }
 
 /* ================= 설정 ================= */
-function SettingsPage({ categories, setCategories, otherPayments, setOtherPayments }) {
+function SettingsPage({ categories, setCategories, otherPayments, setOtherPayments, sheetUrl, setSheetUrl, syncStatus, syncError, lastSync, onSaveNow, onLoadNow }) {
   const [newMain, setNewMain] = useState("");
   const [newType, setNewType] = useState("expense");
   const [subInputs, setSubInputs] = useState({});
   const [newPay, setNewPay] = useState("");
+  const [urlInput, setUrlInput] = useState(sheetUrl);
 
   const addMain = () => {
     if (!newMain.trim()) return;
@@ -875,11 +969,39 @@ function SettingsPage({ categories, setCategories, otherPayments, setOtherPaymen
   const removeSub = (main, sub) => setCategories((c) => c.map((cat) => (cat.main === main ? { ...cat, subs: cat.subs.filter((s) => s !== sub) } : cat)));
   const removeMain = (main) => setCategories((c) => c.filter((cat) => cat.main !== main));
 
+  const statusText = syncStatus === "error" ? `오류: ${syncError}` : syncStatus === "saving" ? "저장 중…" : syncStatus === "loading" ? "불러오는 중…" : lastSync ? `마지막 저장 ${lastSync.toLocaleString("ko-KR")}` : sheetUrl ? "연결됨" : "연결 안 됨";
+  const statusColor = syncStatus === "error" ? CORAL : sheetUrl ? MINT : TEXT_FAINT;
+
   return (
     <div>
       <PageTitle>설정</PageTitle>
 
+      <SectionLabel>구글시트 연동</SectionLabel>
+      <Card style={{ marginBottom: 24 }}>
+        <p style={{ fontSize: 12.5, color: TEXT_DIM, marginTop: 0, marginBottom: 12 }}>
+          구글 앱스 스크립트로 배포한 웹앱 URL을 입력하면 거래내역이 자동으로 시트에 저장돼요. (설정 방법은 채팅으로 안내해드린 Code.gs 참고)
+        </p>
+        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+          <input placeholder="https://script.google.com/macros/s/.../exec" value={urlInput} onChange={(e) => setUrlInput(e.target.value)} style={inputStyle} />
+          <button onClick={() => setSheetUrl(urlInput.trim())} style={primaryBtn}>연결</button>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+          <span style={{ fontSize: 12, color: statusColor, display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: statusColor, display: "inline-block" }} />
+            {statusText}
+          </span>
+          {sheetUrl && (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={onLoadNow} style={{ ...inputStyle, width: "auto", cursor: "pointer", fontWeight: 600 }}>불러오기</button>
+              <button onClick={onSaveNow} style={{ ...inputStyle, width: "auto", cursor: "pointer", fontWeight: 600 }}>지금 저장</button>
+              <button onClick={() => { setSheetUrl(""); setUrlInput(""); }} style={{ ...inputStyle, width: "auto", cursor: "pointer", color: CORAL }}>연결 해제</button>
+            </div>
+          )}
+        </div>
+      </Card>
+
       <SectionLabel>카테고리 관리</SectionLabel>
+
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         <input placeholder="새 대분류" value={newMain} onChange={(e) => setNewMain(e.target.value)} style={inputStyle} />
         <select value={newType} onChange={(e) => setNewType(e.target.value)} style={inputStyle}>
